@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { initialCompanies } from '../data/companiesData';
 import { anexos1, calcularPorcentajeCumplimiento, calcularCumplimientoPorCategoria } from '../data/anexo1Data';
 import { SECCIONES_SST } from '../components/documentos/anexo1/anexo1';
@@ -11,30 +11,62 @@ const ChartIcon = ({ className }) => (
 );
 
 const AnalisisAnexo1 = ({ companies = initialCompanies }) => {
-  const { empresaId, anexoId } = useParams();
+  const { empresaId } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const anexoIdParam = searchParams.get('anexo');
   
   const empresa = companies.find(c => c.id === parseInt(empresaId));
-  const anexoActual = anexos1.find(a => a.id === parseInt(anexoId));
   const anexosEmpresa = anexos1.filter(a => a.empresaId === parseInt(empresaId))
     .sort((a, b) => new Date(b.fechaInspeccion) - new Date(a.fechaInspeccion));
   
-  const anexoAnterior = anexosEmpresa.find(a => a.id !== parseInt(anexoId));
+  // Si hay anexoId en la URL, usar ese, sino usar el más reciente
+  const anexoActual = anexoIdParam 
+    ? anexos1.find(a => a.id === parseInt(anexoIdParam))
+    : anexosEmpresa[0];
+  
+  const anexoAnterior = anexoActual 
+    ? anexosEmpresa.find(a => a.id !== anexoActual.id)
+    : null;
 
   const [filtro, setFiltro] = useState('all'); // all, incumplidos, observaciones, corregidos
 
-  if (!empresa || !anexoActual) {
+  if (!empresa) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="bg-white rounded-lg shadow-md p-6">
-          <p className="text-gray-500">Anexo 1 no encontrado</p>
+          <p className="text-gray-500">Empresa no encontrada</p>
         </div>
       </div>
     );
   }
 
-  // Calcular porcentaje de cumplimiento general
-  const porcentajeCumplimiento = calcularPorcentajeCumplimiento(anexoActual.respuestas || {});
+  if (!anexoActual) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <p className="text-gray-500 mb-4">No hay inspecciones del Anexo 1 para esta empresa</p>
+          <button
+            onClick={() => navigate(`/anexo1/editor/${empresaId}`)}
+            className="px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors"
+          >
+            Crear Primera Inspección
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Calcular porcentaje de cumplimiento general (fórmula real: CUMPLE / (CUMPLE + NO_CUMPLE))
+  const porcentajeCumplimiento = useMemo(() => {
+    if (!anexoActual || !anexoActual.respuestas) return 0;
+    const respuestas = anexoActual.respuestas;
+    const items = Object.values(respuestas);
+    const cumplidos = items.filter(r => r.estado === 'CUMPLE').length;
+    const noCumplidos = items.filter(r => r.estado === 'NO_CUMPLE').length;
+    const total = cumplidos + noCumplidos;
+    return total > 0 ? Math.round((cumplidos / total) * 100) : 0;
+  }, [anexoActual]);
   
   // Calcular cumplimiento por categoría
   const cumplimientoPorCategoria = useMemo(() => {
@@ -180,7 +212,7 @@ const AnalisisAnexo1 = ({ companies = initialCompanies }) => {
             </p>
           </div>
           <button
-            onClick={() => navigate(`/anexo1/editor/${empresaId}/${anexoId}`)}
+            onClick={() => navigate(`/anexo1/editor/${empresaId}/${anexoActual.id}`)}
             className="px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors"
           >
             Editar Anexo

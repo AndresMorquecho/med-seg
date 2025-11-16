@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import CompanyForm from '../components/CompanyForm';
 
 // Iconos simples SVG
@@ -174,6 +175,13 @@ const Companies = ({ companies, setCompanies }) => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => handleViewEmpresa(company)}
+                          className="px-3 py-1 bg-primary text-white rounded hover:bg-primary-dark transition-colors text-xs"
+                          title="Ver empresa completa"
+                        >
+                          Ver
+                        </button>
                         <button
                           onClick={() => handleEditCompany(company)}
                           className="text-primary hover:text-primary-dark transition-colors"

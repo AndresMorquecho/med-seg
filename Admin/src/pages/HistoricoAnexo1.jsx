@@ -135,11 +135,20 @@ const HistoricoAnexo1 = ({ companies = initialCompanies }) => {
                       Ver/Editar
                     </button>
                     <button
-                      onClick={() => navigate(`/anexo1/analisis/${empresaId}/${anexo.id}`)}
+                      onClick={() => navigate(`/empresas/${empresaId}/anexo1/analitica?anexo=${anexo.id}`)}
                       className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm whitespace-nowrap"
                     >
                       Análisis
                     </button>
+                      <button
+                        onClick={() => {
+                          // Descargar PDF (simulado)
+                          window.print();
+                        }}
+                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm whitespace-nowrap"
+                      >
+                        Descargar PDF
+                      </button>
                   </div>
                 </div>
               </div>

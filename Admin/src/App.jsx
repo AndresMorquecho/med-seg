@@ -30,6 +30,12 @@ import EditorAnexo1 from './pages/EditorAnexo1';
 import AnalisisAnexo1 from './pages/AnalisisAnexo1';
 import DocumentosInSitu from './pages/DocumentosInSitu';
 import HistoricoAnexo1 from './pages/HistoricoAnexo1';
+import TareasAnexo1 from './pages/TareasAnexo1';
+import EmpresaView from './pages/EmpresaView';
+import EmpresaAnexo1View from './pages/EmpresaAnexo1View';
+import EmpresaAnexo1Estado from './pages/EmpresaAnexo1Estado';
+import EmpresaRepositorio from './pages/EmpresaRepositorio';
+import EmpresaFormulariosDinamicos from './pages/EmpresaFormulariosDinamicos';
 
 function App() {
   const [companies, setCompanies] = useState(initialCompanies);
@@ -133,6 +139,141 @@ function App() {
                           </ProtectedRoute>
                         } 
                       />
+                      {/* Rutas anidadas bajo /empresas/:empresaId */}
+                      <Route 
+                        path="/empresas/:empresaId" 
+                        element={
+                          <ProtectedRoute>
+                            <EmpresaView companies={companies} />
+                          </ProtectedRoute>
+                        } 
+                      >
+                        <Route 
+                          index
+                          element={
+                            <div className="bg-white rounded-lg shadow-md p-6">
+                              <h2 className="text-xl font-bold text-gray-800 mb-4">Información General</h2>
+                              <p className="text-gray-600">Selecciona una pestaña para ver más información</p>
+                            </div>
+                          } 
+                        />
+                        <Route 
+                          path="trabajadores" 
+                          element={
+                            <ProtectedRoute>
+                              <Employees 
+                                employees={employees}
+                                setEmployees={setEmployees}
+                                companies={companies}
+                              />
+                            </ProtectedRoute>
+                          } 
+                        />
+                        <Route 
+                          path="establecimientos" 
+                          element={
+                            <ProtectedRoute>
+                              <EstablecimientosSalud 
+                                establecimientos={establecimientos}
+                                setEstablecimientos={setEstablecimientos}
+                              />
+                            </ProtectedRoute>
+                          } 
+                        />
+                        <Route 
+                          path="profesionales" 
+                          element={
+                            <ProtectedRoute>
+                              <Profesionales 
+                                profesionales={profesionales}
+                                setProfesionales={setProfesionales}
+                              />
+                            </ProtectedRoute>
+                          } 
+                        />
+                        <Route 
+                          path="repositorio" 
+                          element={
+                            <ProtectedRoute>
+                              <EmpresaRepositorio companies={companies} />
+                            </ProtectedRoute>
+                          } 
+                        />
+                        <Route 
+                          path="formularios" 
+                          element={
+                            <ProtectedRoute>
+                              <EmpresaFormulariosDinamicos companies={companies} employees={employees} />
+                            </ProtectedRoute>
+                          } 
+                        />
+                        {/* Rutas anidadas bajo /empresas/:empresaId/anexo1 */}
+                        <Route 
+                          path="anexo1" 
+                          element={
+                            <ProtectedRoute>
+                              <EmpresaAnexo1View companies={companies} />
+                            </ProtectedRoute>
+                          } 
+                        >
+                          <Route 
+                            index
+                            element={
+                              <EmpresaAnexo1Estado companies={companies} />
+                            } 
+                          />
+                          <Route 
+                            path="estado" 
+                            element={
+                              <EmpresaAnexo1Estado companies={companies} />
+                            } 
+                          />
+                          <Route 
+                            path="checklist" 
+                            element={
+                              <EditorAnexo1 companies={companies} />
+                            } 
+                          />
+                          <Route 
+                            path="tareas" 
+                            element={
+                              <ProtectedRoute>
+                                <TareasAnexo1 companies={companies} />
+                              </ProtectedRoute>
+                            } 
+                          />
+                          <Route 
+                            path="documentos-requeridos" 
+                            element={
+                              <EmpresaRepositorio companies={companies} />
+                            } 
+                          />
+                          <Route 
+                            path="documentos-in-situ" 
+                            element={
+                              <ProtectedRoute>
+                                <DocumentosInSitu companies={companies} />
+                              </ProtectedRoute>
+                            } 
+                          />
+                          <Route 
+                            path="historial" 
+                            element={
+                              <ProtectedRoute>
+                                <HistoricoAnexo1 companies={companies} />
+                              </ProtectedRoute>
+                            } 
+                          />
+                          <Route 
+                            path="analitica" 
+                            element={
+                              <ProtectedRoute>
+                                <AnalisisAnexo1 companies={companies} />
+                              </ProtectedRoute>
+                            } 
+                          />
+                        </Route>
+                      </Route>
                       <Route 
                         path="/employees" 
                         element={
@@ -317,6 +458,14 @@ function App() {
                         element={
                           <ProtectedRoute>
                             <HistoricoAnexo1 companies={companies} />
+                          </ProtectedRoute>
+                        } 
+                      />
+                      <Route 
+                        path="/anexo1/tareas" 
+                        element={
+                          <ProtectedRoute>
+                            <TareasAnexo1 companies={companies} />
                           </ProtectedRoute>
                         } 
                       />

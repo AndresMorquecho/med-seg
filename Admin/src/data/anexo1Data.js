@@ -68,4 +68,37 @@ export const calcularCumplimientoPorCategoria = (respuestas, categoriaItems) => 
   return total > 0 ? Math.round((cumplidos / total) * 100) : 0;
 };
 
+// Función para obtener un anexo por ID
+export const getAnexoById = (anexoId) => {
+  return anexos1.find(a => a.id === parseInt(anexoId));
+};
+
+// Función para actualizar un anexo
+export const updateAnexo = (anexoId, datos) => {
+  const index = anexos1.findIndex(a => a.id === parseInt(anexoId));
+  if (index !== -1) {
+    anexos1[index] = {
+      ...anexos1[index],
+      ...datos,
+      fechaActualizacion: new Date().toISOString().split('T')[0]
+    };
+    return anexos1[index];
+  }
+  return null;
+};
+
+// Función para actualizar respuesta de un ítem específico
+export const updateRespuestaItem = (anexoId, itemId, respuesta) => {
+  const anexo = getAnexoById(anexoId);
+  if (anexo) {
+    if (!anexo.respuestas) {
+      anexo.respuestas = {};
+    }
+    anexo.respuestas[itemId] = respuesta;
+    anexo.fechaActualizacion = new Date().toISOString().split('T')[0];
+    return anexo;
+  }
+  return null;
+};
+
 

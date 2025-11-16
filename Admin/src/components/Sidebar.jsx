@@ -71,15 +71,6 @@ const Sidebar = () => {
   const menuItems = [
     { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { path: '/companies', icon: Building2, label: 'Empresas' },
-    { path: '/employees', icon: Users, label: 'Trabajadores' },
-    { path: '/establecimientos-salud', icon: Hospital, label: 'Establecimientos de Salud' },
-    { path: '/profesionales', icon: UserCircle, label: 'Profesionales' },
-    { path: '/documents', icon: FileText, label: 'Gestión de Formularios y Registros' },
-    { path: '/capacitaciones', icon: GraduationCap, label: 'Capacitaciones' },
-    { path: '/evaluaciones', icon: ClipboardCheck, label: 'Evaluaciones' },
-    { path: '/control-resultados', icon: BarChart, label: 'Control y Resultados' },
-    { path: '/repository', icon: FolderOpen, label: 'Repositorio' },
-    { path: '/anexo1/gestion', icon: ClipboardList, label: 'Gestión Anexo 1 - SST' },
     { path: '/settings', icon: Settings, label: 'Configuración' }
   ];
 
