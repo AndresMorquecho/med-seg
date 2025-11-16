@@ -1,0 +1,480 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+/* Estilos para la barra lateral colapsable */
+.sidebar .group-hover\:inline {
+  display: inline !important;
+}
+
+/* Mejorar visibilidad del texto en la barra lateral al expandirse */
+.sidebar span {
+  transition: opacity 0.2s ease-in-out;
+}
+
+/* Estilos específicos cuando se está imprimiendo */
+#print-container {
+  position: absolute;
+  left: -9999px;
+  width: 210mm;
+  background: white;
+}
+
+/* Estilos para impresión - tanto en @media print como para html2pdf */
+@media print {
+  /* Configurar márgenes de página más pequeños */
+  @page {
+    margin: 5mm !important;
+    size: A4 portrait;
+  }
+  
+  /* Resetear todo */
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  
+  /* Ocultar TODO excepto el documento usando visibility */
+  body.printing-document {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  
+  body.printing-document * {
+    visibility: hidden !important;
+  }
+  
+  /* Mostrar el documento y todo su contenido */
+  body.printing-document #documento-inspeccion {
+    visibility: visible !important;
+  }
+  
+  body.printing-document #documento-inspeccion * {
+    visibility: visible !important;
+  }
+  
+  /* Ocultar elementos específicos del layout */
+  body.printing-document aside,
+  body.printing-document .sidebar,
+  body.printing-document header,
+  body.printing-document nav,
+  body.printing-document .no-print {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    width: 0 !important;
+    overflow: hidden !important;
+  }
+  
+  /* Mostrar solo el documento */
+  body.printing-document #documento-inspeccion {
+    visibility: visible !important;
+    display: block !important;
+    position: relative !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    background: white !important;
+    font-size: 12pt !important;
+    line-height: 1.4 !important;
+    page-break-after: auto !important;
+    page-break-before: auto !important;
+  }
+  
+  /* Asegurar que no haya páginas en blanco antes o después */
+  body.printing-document #documento-inspeccion:first-child {
+    page-break-before: avoid !important;
+  }
+  
+  body.printing-document #documento-inspeccion:last-child {
+    page-break-after: avoid !important;
+  }
+  
+  /* Mostrar todos los hijos del documento */
+  body.printing-document #documento-inspeccion * {
+    visibility: visible !important;
+  }
+  
+  /* Asegurar que las tablas y sus elementos sean visibles con los displays correctos */
+  body.printing-document #documento-inspeccion table {
+    display: table !important;
+    visibility: visible !important;
+    width: 100% !important;
+    font-size: 11pt !important;
+    margin: 0 !important;
+  }
+  
+  body.printing-document #documento-inspeccion thead {
+    display: table-header-group !important;
+    visibility: visible !important;
+  }
+  
+  body.printing-document #documento-inspeccion tbody {
+    display: table-row-group !important;
+    visibility: visible !important;
+  }
+  
+  body.printing-document #documento-inspeccion tr {
+    display: table-row !important;
+    visibility: visible !important;
+    page-break-inside: avoid !important;
+  }
+  
+  body.printing-document #documento-inspeccion th,
+  body.printing-document #documento-inspeccion td {
+    display: table-cell !important;
+    visibility: visible !important;
+    font-size: 11pt !important;
+    padding: 6px !important;
+  }
+  
+  /* Asegurar que los spans y textos dentro de las celdas sean visibles */
+  body.printing-document #documento-inspeccion span,
+  body.printing-document #documento-inspeccion p,
+  body.printing-document #documento-inspeccion h1,
+  body.printing-document #documento-inspeccion h2,
+  body.printing-document #documento-inspeccion h3 {
+    visibility: visible !important;
+  }
+  
+  body.printing-document #documento-inspeccion h1 {
+    font-size: 18pt !important;
+    margin: 8pt 0 !important;
+  }
+  
+  body.printing-document #documento-inspeccion h2,
+  body.printing-document #documento-inspeccion h3 {
+    font-size: 14pt !important;
+    margin: 6pt 0 !important;
+  }
+  
+  /* Evitar páginas en blanco */
+  body.printing-document #documento-inspeccion section {
+    page-break-after: auto !important;
+    page-break-inside: avoid !important;
+  }
+  
+  /* Ocultar otros elementos específicos */
+  body.printing-document aside,
+  body.printing-document .sidebar,
+  body.printing-document header,
+  body.printing-document nav,
+  body.printing-document .no-print {
+    display: none !important;
+    visibility: hidden !important;
+  }
+  
+  /* Ocultar barra lateral y botones al imprimir */
+  aside,
+  .no-print,
+  .sidebar,
+  .group,
+  header,
+  nav {
+    display: none !important;
+    visibility: hidden !important;
+  }
+  
+  body.printing-document {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+  }
+  
+  body.printing-document html {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+  }
+  
+  /* Asegurar que el documento sea visible */
+  #documento-inspeccion {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    position: relative !important;
+    left: auto !important;
+    top: auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 auto !important;
+    padding: 20px !important;
+    background: #fff !important;
+  }
+
+  /* Ajustar márgenes del documento */
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+    width: 100% !important;
+    height: auto !important;
+  }
+
+  #root {
+    margin: 0 !important;
+    padding: 0 !important;
+    display: none !important;
+  }
+  
+  body.printing-document #root {
+    display: block !important;
+  }
+
+  #documento-inspeccion {
+    width: 100% !important;
+    margin: 0 auto !important;
+    padding: 15mm !important;
+    max-width: 100% !important;
+    font-size: 12pt !important;
+  }
+
+  /* Estilos generales del documento */
+  #documento-inspeccion *,
+  #documento-induccion * {
+    color: #000 !important;
+    font-family: Arial, sans-serif !important;
+  }
+  
+  body.printing-document #documento-inspeccion * {
+    font-size: 11pt !important;
+  }
+  
+  body.printing-document #documento-induccion * {
+    font-size: 11px !important;
+  }
+  
+  /* Estilos específicos para documento de inducción */
+  #documento-induccion {
+    font-size: 11px !important;
+    line-height: 1.5 !important;
+  }
+  
+  #documento-induccion table {
+    border-collapse: collapse !important;
+    width: 100% !important;
+    margin: 10px 0 !important;
+  }
+  
+  #documento-induccion th,
+  #documento-induccion td {
+    border: 1px solid #000 !important;
+    padding: 8px !important;
+    text-align: left !important;
+    vertical-align: top !important;
+    white-space: normal !important;
+    word-wrap: break-word !important;
+    font-size: 10px !important;
+  }
+  
+  #documento-induccion thead th {
+    background-color: #e5e7eb !important;
+    font-weight: bold !important;
+    font-size: 11px !important;
+  }
+
+  /* Reajuste visual del documento */
+  table {
+    border-collapse: collapse !important;
+    table-layout: fixed !important;
+    width: 100% !important;
+    border-spacing: 0 !important;
+  }
+
+  /* Forzar impresión de colores de fondo */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
+  /* Asegurar que todas las celdas sean visibles */
+  th, td {
+    display: table-cell !important;
+    visibility: visible !important;
+    border: 1px solid #000 !important;
+    padding: 6px !important;
+    font-family: Arial, sans-serif !important;
+    font-size: 11pt !important;
+    text-align: center;
+    vertical-align: middle !important;
+    color: #000 !important;
+    height: auto !important;
+    opacity: 1 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Filas y celdas de ítems - texto visible */
+  tr, td {
+    white-space: normal !important;
+    word-wrap: break-word !important;
+    overflow: visible !important;
+    color: #000 !important;
+    height: auto !important;
+  }
+
+  /* Celdas de ítems con texto visible y alineado a la izquierda */
+  tbody td.text-left,
+  tbody td.align-middle {
+    text-align: left !important;
+    white-space: normal !important;
+    word-wrap: break-word !important;
+    overflow: visible !important;
+    overflow-wrap: break-word !important;
+    color: #000 !important;
+    height: auto !important;
+    max-height: none !important;
+  }
+
+  /* Asegurar que el texto dentro de las celdas sea visible */
+  tbody td span,
+  tbody td {
+    color: #000 !important;
+    display: inline !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+
+  th.text-left {
+    text-align: left !important;
+  }
+
+  /* Color de fondo de encabezado - FORZAR VISIBILIDAD */
+  thead th,
+  thead tr th {
+    background-color: #A9D18E !important;
+    color: #000 !important;
+    white-space: normal !important;
+    word-wrap: break-word !important;
+    overflow-wrap: break-word !important;
+    display: table-cell !important;
+    visibility: visible !important;
+    font-weight: bold !important;
+    opacity: 1 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Encabezado B, M, NA específico */
+  thead th[rowspan="2"] {
+    display: table-cell !important;
+    visibility: visible !important;
+    font-weight: bold !important;
+    color: #000 !important;
+    background-color: #A9D18E !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Texto dentro de los encabezados */
+  thead th *,
+  thead th {
+    color: #000 !important;
+    visibility: visible !important;
+    display: block !important;
+    font-weight: bold !important;
+  }
+  
+  /* Asegurar que TODOS los elementos de encabezado sean visibles */
+  thead {
+    display: table-header-group !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+  
+  thead tr {
+    display: table-row !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    background-color: #A9D18E !important;
+  }
+  
+  thead th {
+    display: table-cell !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    background-color: #A9D18E !important;
+    color: #000 !important;
+    font-weight: bold !important;
+  }
+
+  /* Celda de RECOMENDACIÓN con white-space: nowrap - sin saltos de palabra */
+  th.recomendacion {
+    white-space: nowrap !important;
+    width: 18% !important;
+    display: table-cell !important;
+    visibility: visible !important;
+    word-break: keep-all !important;
+    overflow-wrap: normal !important;
+    background-color: #A9D18E !important;
+    color: #000 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Asegurar bordes continuos en tablas */
+  table td,
+  table th {
+    border-left: 1px solid #000 !important;
+    border-right: 1px solid #000 !important;
+    border-top: 1px solid #000 !important;
+    border-bottom: 1px solid #000 !important;
+  }
+
+  /* Checkboxes */
+  input[type="checkbox"] {
+    appearance: none !important;
+    -webkit-appearance: none !important;
+    width: 12px !important;
+    height: 12px !important;
+    border: 1px solid #000 !important;
+    position: relative;
+    display: inline-block !important;
+    visibility: visible !important;
+  }
+
+  input[type="checkbox"]:checked::after {
+    content: "X";
+    position: absolute;
+    top: -2px;
+    left: 2px;
+    font-size: 10px;
+    font-weight: bold;
+    color: #000;
+  }
+
+  /* Inputs y textareas sin bordes */
+  input[type="text"],
+  textarea {
+    border: none !important;
+    outline: none !important;
+    resize: none !important;
+    overflow: visible !important;
+    color: #000 !important;
+  }
+
+  /* Evitar saltos de página en secciones */
+  section, div {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+}
