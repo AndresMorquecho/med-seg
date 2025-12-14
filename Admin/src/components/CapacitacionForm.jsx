@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 
-const CapacitacionForm = ({ onAddCapacitacion, onUpdateCapacitacion, editingCapacitacion, onCancel, companies, actividadesDisponibles, estadosCapacitacion }) => {
+const CapacitacionForm = ({ onAddCapacitacion, onUpdateCapacitacion, editingCapacitacion, onCancel, companies, actividadesDisponibles, estadosCapacitacion, empresaId }) => {
   const [formData, setFormData] = useState({
     nombre: editingCapacitacion?.nombre || '',
     descripcion: editingCapacitacion?.descripcion || '',
@@ -48,6 +48,7 @@ const CapacitacionForm = ({ onAddCapacitacion, onUpdateCapacitacion, editingCapa
       } else {
         const newCapacitacion = {
           id: Date.now(),
+          empresaId: empresaId || null,
           ...formData,
           fechaCreacion: new Date().toISOString().split('T')[0]
         };

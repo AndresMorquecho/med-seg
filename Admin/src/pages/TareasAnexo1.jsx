@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { initialCompanies } from '../data/companiesData';
 import { tareas, resolverTarea, actualizarEstadoTarea } from '../data/tareasData';
 import { anexos1, updateRespuestaItem } from '../data/anexo1Data';
@@ -12,20 +12,20 @@ const TaskIcon = ({ className }) => (
 
 const TareasAnexo1 = ({ companies = initialCompanies }) => {
   const navigate = useNavigate();
+  const { empresaId } = useParams();
   const [searchParams] = useSearchParams();
-  const empresaIdParam = searchParams.get('empresa');
+
+  const empresa = companies.find(c => c.id === parseInt(empresaId));
 
   const [filtroEstado, setFiltroEstado] = useState('all');
   const [filtroTipo, setFiltroTipo] = useState('all');
   const [filtroPrioridad, setFiltroPrioridad] = useState('all');
-  const [empresaSeleccionada, setEmpresaSeleccionada] = useState(
-    empresaIdParam ? companies.find(c => c.id === parseInt(empresaIdParam)) : null
-  );
 
   const tareasFiltradas = useMemo(() => {
-    let filtradas = empresaSeleccionada 
-      ? tareas.filter(t => t.empresaId === empresaSeleccionada.id)
-      : tareas;
+    // Solo mostrar tareas de la empresa actual
+    let filtradas = empresaId 
+      ? tareas.filter(t => t.empresaId === parseInt(empresaId))
+      : [];
 
     if (filtroEstado !== 'all') {
       filtradas = filtradas.filter(t => t.estado === filtroEstado);
@@ -47,12 +47,12 @@ const TareasAnexo1 = ({ companies = initialCompanies }) => {
       }
       return new Date(b.fechaCreacion) - new Date(a.fechaCreacion);
     });
-  }, [empresaSeleccionada, filtroEstado, filtroTipo, filtroPrioridad]);
+  }, [empresaId, filtroEstado, filtroTipo, filtroPrioridad]);
 
   const estadisticas = useMemo(() => {
-    const todas = empresaSeleccionada 
-      ? tareas.filter(t => t.empresaId === empresaSeleccionada.id)
-      : tareas;
+    const todas = empresaId 
+      ? tareas.filter(t => t.empresaId === parseInt(empresaId))
+      : [];
     
     return {
       total: todas.length,
@@ -61,7 +61,7 @@ const TareasAnexo1 = ({ companies = initialCompanies }) => {
       corregidas: todas.filter(t => t.estado === 'Corregido').length,
       rechazadas: todas.filter(t => t.estado === 'Rechazado').length
     };
-  }, [empresaSeleccionada]);
+  }, [empresaId]);
 
   const handleResolverTarea = (tareaId) => {
     const tarea = tareas.find(t => t.id === tareaId);
@@ -196,7 +196,7 @@ const TareasAnexo1 = ({ companies = initialCompanies }) => {
         <div className="flex items-center justify-between">
           <div>
             <button
-              onClick={() => navigate('/anexo1/gestion')}
+              onClick={() => navigate('/anexo1')}
               className="flex items-center gap-2 text-gray-600 hover:text-gray-800 mb-4 transition-colors"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -215,30 +215,9 @@ const TareasAnexo1 = ({ companies = initialCompanies }) => {
         </div>
       </div>
 
-      {/* Selección de empresa */}
-      {!empresaSeleccionada && (
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Filtrar por Empresa (Opcional)
-          </label>
-          <select
-            value=""
-            onChange={(e) => {
-              const empresa = companies.find(c => c.id === parseInt(e.target.value));
-              setEmpresaSeleccionada(empresa || null);
-            }}
-            className="w-full md:w-1/3 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-          >
-            <option value="">Todas las empresas</option>
-            {companies.map(empresa => (
-              <option key={empresa.id} value={empresa.id}>{empresa.name}</option>
-            ))}
-          </select>
-        </div>
-      )}
-
-      {empresaSeleccionada && (
-        <div className="bg-primary/10 border border-primary rounded-lg p-4 flex items-center justify-between">
+      {/* Información de la empresa */}
+      {empresa && (
+        <div className="bg-primary/10 border border-primary rounded-lg p-4">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-primary rounded flex items-center justify-center">
               <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -246,16 +225,10 @@ const TareasAnexo1 = ({ companies = initialCompanies }) => {
               </svg>
             </div>
             <div>
-              <h3 className="font-semibold text-gray-900">{empresaSeleccionada.name}</h3>
-              <p className="text-sm text-gray-600">RUC: {empresaSeleccionada.ruc}</p>
+              <h3 className="font-semibold text-gray-900">{empresa.name}</h3>
+              <p className="text-sm text-gray-600">RUC: {empresa.ruc}</p>
             </div>
           </div>
-          <button
-            onClick={() => setEmpresaSeleccionada(null)}
-            className="text-red-500 hover:text-red-700 text-sm px-3 py-1"
-          >
-            ✕ Limpiar filtro
-          </button>
         </div>
       )}
 
@@ -432,9 +405,7 @@ const TareasAnexo1 = ({ companies = initialCompanies }) => {
                 No hay tareas
               </p>
               <p className="text-gray-500 text-sm">
-                {empresaSeleccionada 
-                  ? 'Las tareas aparecerán cuando se marquen ítems como NO CUMPLE en el Anexo 1'
-                  : 'Selecciona una empresa o crea inspecciones del Anexo 1'}
+                Las tareas aparecerán cuando se marquen ítems como NO CUMPLE en el Anexo 1
               </p>
             </div>
           )}

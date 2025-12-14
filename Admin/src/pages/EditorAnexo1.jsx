@@ -1,12 +1,22 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { initialCompanies } from '../data/companiesData';
+import { initialEmployees } from '../data/employeesData';
 import { anexos1 } from '../data/anexo1Data';
 import { SECCIONES_SST } from '../components/documentos/anexo1/anexo1';
+import { filtrarSeccionesPorEmpresa, obtenerConfiguracionEmpresa } from '../utils/anexo1Filtros';
 import { crearTareaDesdeItem, tareas, getTareasByItem, actualizarEstadoTarea } from '../data/tareasData';
-import { getEvidenciasByItem, evidencias } from '../data/evidenciasData';
+import { 
+  getEvidenciasByItem, 
+  getEvidenciasEmpresaByItem, 
+  getEvidenciasTrabajadoresByItem,
+  evidencias 
+} from '../data/evidenciasData';
 import { updateRespuestaItem } from '../data/anexo1Data';
 import { getDocumentosByEmpresa, getDocumentosByItem, vincularDocumentoAItem } from '../data/documentosDinamicosData';
+import { getCapacitacionesByItem } from '../data/capacitacionesData';
+import { getEvaluacionesByItem } from '../data/evaluacionesData';
+import ModalDocumentosDinamicos from '../components/ModalDocumentosDinamicos';
 
 const SearchIcon = ({ className }) => (
   <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -35,9 +45,16 @@ const PrinterIcon = ({ className }) => (
 const EditorAnexo1 = ({ companies = initialCompanies }) => {
   const { empresaId, anexoId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const anexoIdFromQuery = searchParams.get('anexo');
+  const finalAnexoId = anexoId || anexoIdFromQuery;
+  
+  // Detectar si está dentro del layout de EmpresaAnexo1View
+  const isInLayout = location.pathname.includes('/anexo1/empresa/') && location.pathname.includes('/editor');
   
   const empresa = companies.find(c => c.id === parseInt(empresaId));
-  const anexoExistente = anexoId ? anexos1.find(a => a.id === parseInt(anexoId)) : null;
+  const anexoExistente = finalAnexoId ? anexos1.find(a => a.id === parseInt(finalAnexoId)) : null;
 
   const [datosGenerales, setDatosGenerales] = useState(() => {
     if (anexoExistente) return anexoExistente.datosGenerales || {};
@@ -80,6 +97,46 @@ const EditorAnexo1 = ({ companies = initialCompanies }) => {
   });
 
   const [estado, setEstado] = useState(anexoExistente?.estado || 'Borrador');
+  
+  // Configuración de empresa para filtrado dinámico (después de datosGenerales)
+  const configEmpresa = useMemo(() => {
+    try {
+      if (!empresa) return null;
+      const numTrabajadores = datosGenerales.numero_total_trabajadores || 
+                             initialEmployees.filter(e => e.companyId === parseInt(empresaId)).length;
+      return obtenerConfiguracionEmpresa({
+        ...empresa,
+        employees: initialEmployees.filter(e => e.companyId === parseInt(empresaId)),
+        numero_total_trabajadores: numTrabajadores
+      });
+    } catch (error) {
+      console.error('Error al obtener configuración de empresa:', error);
+      return null;
+    }
+  }, [empresa, empresaId, datosGenerales.numero_total_trabajadores]);
+  
+  // Secciones filtradas según la empresa (solo mostrar ítems aplicables)
+  const seccionesFiltradas = useMemo(() => {
+    try {
+      // Si no hay SECCIONES_SST, retornar array vacío
+      if (!SECCIONES_SST || !Array.isArray(SECCIONES_SST)) {
+        console.warn('SECCIONES_SST no está definido o no es un array');
+        return [];
+      }
+      
+      // Si no hay configEmpresa, usar todas las secciones
+      if (!configEmpresa) {
+        return SECCIONES_SST;
+      }
+      
+      const filtradas = filtrarSeccionesPorEmpresa(SECCIONES_SST, configEmpresa);
+      return filtradas && Array.isArray(filtradas) && filtradas.length > 0 ? filtradas : SECCIONES_SST;
+    } catch (error) {
+      console.error('Error al filtrar secciones:', error);
+      // Fallback seguro: retornar todas las secciones
+      return SECCIONES_SST || [];
+    }
+  }, [configEmpresa]);
   const [filtroEstado, setFiltroEstado] = useState('all');
   const [filtroCategoria, setFiltroCategoria] = useState('all');
   const [busquedaItem, setBusquedaItem] = useState('');
@@ -88,16 +145,22 @@ const EditorAnexo1 = ({ companies = initialCompanies }) => {
   const [itemAccionesAbierto, setItemAccionesAbierto] = useState(null);
   const [showEvidenciaPanel, setShowEvidenciaPanel] = useState(false);
   const [itemEvidenciaSeleccionado, setItemEvidenciaSeleccionado] = useState(null);
+  const [showDocumentosModal, setShowDocumentosModal] = useState(false);
+  const [itemDocumentoSeleccionado, setItemDocumentoSeleccionado] = useState(null);
   const [showToast, setShowToast] = useState({ visible: false, message: '', type: 'success' });
 
   // Inicializar todas las secciones expandidas
   useEffect(() => {
+    if (!seccionesFiltradas || seccionesFiltradas.length === 0) return;
+    
     const expandidas = {};
-    SECCIONES_SST.forEach(seccion => {
-      expandidas[seccion.id] = true; // Expandir todas las secciones por defecto (datos y checklist)
+    seccionesFiltradas.forEach(seccion => {
+      if (seccion && seccion.id) {
+        expandidas[seccion.id] = true; // Expandir todas las secciones por defecto (datos y checklist)
+      }
     });
     setSeccionesExpandidas(expandidas);
-  }, []);
+  }, [seccionesFiltradas]);
 
   const toggleSeccion = (seccionId) => {
     setSeccionesExpandidas(prev => ({
@@ -127,7 +190,7 @@ const EditorAnexo1 = ({ companies = initialCompanies }) => {
     if (nuevoEstado === 'NO_CUMPLE' && estadoAnterior !== 'NO_CUMPLE') {
       // Buscar el ítem para obtener su texto
       let itemTexto = '';
-      SECCIONES_SST.forEach(seccion => {
+      seccionesFiltradas.forEach(seccion => {
         if (seccion.tipo === 'checklist' && seccion.items) {
           const item = seccion.items.find(i => i.id === itemId);
           if (item) {
@@ -147,13 +210,17 @@ const EditorAnexo1 = ({ companies = initialCompanies }) => {
     }
   };
 
-  // Filtrar ítems según los filtros
+  // Filtrar ítems según los filtros (solo ítems aplicables)
   const itemsFiltrados = useMemo(() => {
+    if (!seccionesFiltradas || seccionesFiltradas.length === 0) return [];
+    
     let items = [];
     
-    SECCIONES_SST.forEach(seccion => {
-      if (seccion.tipo === 'checklist' && seccion.items) {
+    seccionesFiltradas.forEach(seccion => {
+      if (!seccion) return;
+      if (seccion.tipo === 'checklist' && seccion.items && Array.isArray(seccion.items)) {
         seccion.items.forEach(item => {
+          if (!item || !item.id) return;
           const respuesta = respuestas[item.id];
           const estadoItem = respuesta?.estado;
           
@@ -186,7 +253,7 @@ const EditorAnexo1 = ({ companies = initialCompanies }) => {
     });
     
     return items;
-  }, [filtroEstado, filtroCategoria, busquedaItem, respuestas]);
+  }, [filtroEstado, filtroCategoria, busquedaItem, respuestas, seccionesFiltradas]);
 
   const handleGuardar = (nuevoEstado = null) => {
     const estadoFinal = nuevoEstado || estado;
@@ -222,7 +289,7 @@ const EditorAnexo1 = ({ companies = initialCompanies }) => {
     
     if (estadoFinal === 'Publicado') {
       setTimeout(() => {
-        navigate(`/anexo1/gestion`);
+        navigate(`/anexo1/empresa/${empresaId}/estado`);
       }, 1500);
     }
   };
@@ -236,6 +303,29 @@ const EditorAnexo1 = ({ companies = initialCompanies }) => {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="bg-white rounded-lg shadow-md p-6">
           <p className="text-gray-500">Empresa no encontrada</p>
+          <button 
+            onClick={() => navigate('/anexo1')}
+            className="mt-4 px-4 py-2 bg-primary text-white rounded hover:bg-primary-dark"
+          >
+            Volver a Gestión Anexo 1
+          </button>
+        </div>
+      </div>
+    );
+  }
+  
+  // Validar que seccionesFiltradas esté definido
+  if (!seccionesFiltradas || seccionesFiltradas.length === 0) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <p className="text-gray-500">Error al cargar las secciones del Anexo 1</p>
+          <button 
+            onClick={() => navigate('/anexo1')}
+            className="mt-4 px-4 py-2 bg-primary text-white rounded hover:bg-primary-dark"
+          >
+            Volver a Gestión Anexo 1
+          </button>
         </div>
       </div>
     );
@@ -246,19 +336,42 @@ const EditorAnexo1 = ({ companies = initialCompanies }) => {
     setShowToast({ visible: true, message, type });
     setTimeout(() => setShowToast({ visible: false, message: '', type: 'success' }), 3000);
   };
+  
+  // Validación final antes de renderizar
+  if (!seccionesFiltradas || !Array.isArray(seccionesFiltradas) || seccionesFiltradas.length === 0) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
+        <div className="bg-white rounded-lg shadow-md p-6 max-w-md">
+          <h2 className="text-xl font-bold text-gray-800 mb-4">Error al cargar el Anexo 1</h2>
+          <p className="text-gray-600 mb-4">
+            No se pudieron cargar las secciones del Anexo 1. Por favor, intente nuevamente.
+          </p>
+          <button 
+            onClick={() => navigate('/anexo1')}
+            className="w-full px-4 py-2 bg-primary text-white rounded hover:bg-primary-dark transition-colors"
+          >
+            Volver a Gestión Anexo 1
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // Función para subir evidencia
-  const handleSubirEvidencia = (itemId, file) => {
+  const handleSubirEvidencia = (itemId, file, tipoEvidencia = 'general', trabajadorSeleccionado = '', areaTexto = '') => {
     if (!file) return;
     
     const nuevaEvidencia = {
-      id: Date.now(),
+      id: Date.now() + Math.random(),
       empresaId: parseInt(empresaId),
       anexo1Id: anexoId ? parseInt(anexoId) : null,
       itemId: itemId,
       nombre: file.name,
       archivo: URL.createObjectURL(file),
       tipo: file.type.startsWith('image/') ? 'imagen' : 'documento',
+      tipoEvidencia: tipoEvidencia, // general, trabajador, area, documento-dinamico
+      trabajador: trabajadorSeleccionado || null,
+      area: areaTexto || null,
       estado: 'Pendiente',
       subidoPor: 'admin',
       aprobadoPor: null,
@@ -302,24 +415,47 @@ const EditorAnexo1 = ({ companies = initialCompanies }) => {
         />
       )}
 
+      {/* Modal para vincular documentos dinámicos */}
+      {showDocumentosModal && itemDocumentoSeleccionado && (
+        <ModalDocumentosDinamicos
+          itemId={itemDocumentoSeleccionado}
+          empresaId={parseInt(empresaId)}
+          anexoId={anexoId ? parseInt(anexoId) : null}
+          onCerrar={() => {
+            setShowDocumentosModal(false);
+            setItemDocumentoSeleccionado(null);
+          }}
+          onVincular={(documentoId) => {
+            vincularDocumentoAItem(documentoId, itemDocumentoSeleccionado, anexoId ? parseInt(anexoId) : null);
+            setShowToast({ visible: true, message: 'Documento vinculado exitosamente', type: 'success' });
+            setTimeout(() => {
+              setShowToast({ visible: false, message: '', type: 'success' });
+              setShowDocumentosModal(false);
+              setItemDocumentoSeleccionado(null);
+            }, 2000);
+          }}
+        />
+      )}
+
       <div className="space-y-6 no-print">
-      {/* Header */}
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <button
-              onClick={() => navigate('/anexo1/gestion')}
-              className="flex items-center gap-2 text-gray-600 hover:text-gray-800 mb-4 transition-colors"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-              Volver a Gestión
-            </button>
-            <h1 className="text-3xl font-bold text-gray-800">Editor Anexo 1 - SST</h1>
-            <p className="text-gray-600 mt-1">{empresa.name}</p>
-          </div>
-          <div className="flex gap-3">
+      {/* Header - Solo si no está en el layout */}
+      {!isInLayout && (
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <button
+                onClick={() => navigate(`/anexo1/empresa/${empresaId}/estado`)}
+                className="flex items-center gap-2 text-gray-600 hover:text-gray-800 mb-4 transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+                Volver a Estado General
+              </button>
+              <h1 className="text-3xl font-bold text-gray-800">Editor Anexo 1 - SST</h1>
+              <p className="text-gray-600 mt-1">{empresa.name}</p>
+            </div>
+            <div className="flex gap-3">
             <select
               value={estado}
               onChange={(e) => setEstado(e.target.value)}
@@ -349,8 +485,46 @@ const EditorAnexo1 = ({ companies = initialCompanies }) => {
               Imprimir
             </button>
           </div>
+          </div>
         </div>
-      </div>
+      )}
+      
+      {/* Barra de herramientas compacta si está en el layout */}
+      {isInLayout && (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 px-4 py-2.5 flex items-center justify-between">
+          <h2 className="text-base font-semibold text-gray-800">Checklist Anexo 1</h2>
+          <div className="flex gap-2">
+            <select
+              value={estado}
+              onChange={(e) => setEstado(e.target.value)}
+              className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+            >
+              <option value="Borrador">Borrador</option>
+              <option value="Publicado">Publicado</option>
+            </select>
+            <button
+              onClick={() => handleGuardar()}
+              className="flex items-center gap-1.5 px-4 py-1.5 text-sm bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors"
+            >
+              <SaveIcon className="w-4 h-4" />
+              Guardar
+            </button>
+            <button
+              onClick={() => handleGuardar('Publicado')}
+              className="flex items-center gap-1.5 px-4 py-1.5 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+            >
+              Publicar
+            </button>
+            <button
+              onClick={handleImprimir}
+              className="flex items-center gap-1.5 px-4 py-1.5 text-sm bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+            >
+              <PrinterIcon className="w-4 h-4" />
+              Imprimir
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Filtros y búsqueda mejorado */}
       <div className="bg-white rounded-lg shadow-md p-4">
@@ -381,7 +555,7 @@ const EditorAnexo1 = ({ companies = initialCompanies }) => {
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
           >
             <option value="all">Todas las categorías</option>
-            {SECCIONES_SST.filter(s => s.tipo === 'checklist').map(seccion => (
+            {seccionesFiltradas.filter(s => s.tipo === 'checklist').map(seccion => (
               <option key={seccion.id} value={seccion.id}>{seccion.titulo}</option>
             ))}
           </select>
@@ -399,7 +573,7 @@ const EditorAnexo1 = ({ companies = initialCompanies }) => {
       </div>
 
       {/* Sección de Datos Generales */}
-      {SECCIONES_SST.filter(s => s.tipo === 'datos').map(seccion => (
+      {seccionesFiltradas.filter(s => s.tipo === 'datos').map(seccion => (
         <SeccionDatos
           key={seccion.id}
           seccion={seccion}
@@ -410,9 +584,9 @@ const EditorAnexo1 = ({ companies = initialCompanies }) => {
         />
       ))}
 
-      {/* Secciones de Checklist */}
-      {SECCIONES_SST.filter(s => s.tipo === 'checklist').map(seccion => {
-        const itemsSeccion = seccion.items.filter(item => {
+      {/* Secciones de Checklist (solo ítems aplicables) */}
+      {seccionesFiltradas.filter(s => s.tipo === 'checklist' && s.items && Array.isArray(s.items)).map(seccion => {
+        const itemsSeccion = (seccion.items || []).filter(item => {
           if (filtroEstado !== 'all') {
             const respuesta = respuestas[item.id];
             if (respuesta?.estado !== filtroEstado) return false;
@@ -437,18 +611,8 @@ const EditorAnexo1 = ({ companies = initialCompanies }) => {
             isExpanded={seccionesExpandidas[seccion.id]}
             onToggle={() => toggleSeccion(seccion.id)}
             empresaId={parseInt(empresaId)}
-            anexoId={anexoId ? parseInt(anexoId) : null}
+            anexoId={anexoId || null}
             numeroTrabajadores={datosGenerales?.numero_total_trabajadores || datosGenerales?.trabajadores_centro}
-            onAbrirPanelEvidencias={(itemId) => {
-              setItemEvidenciaSeleccionado(itemId);
-              setShowEvidenciaPanel(true);
-            }}
-            onGenerarTarea={(itemId, itemTexto) => {
-              const nuevaTarea = crearTareaDesdeItem(parseInt(empresaId), anexoId ? parseInt(anexoId) : null, itemId, itemTexto);
-              tareas.push(nuevaTarea);
-              setShowToast({ visible: true, message: 'Tarea generada exitosamente', type: 'success' });
-              setTimeout(() => setShowToast({ visible: false, message: '', type: 'success' }), 3000);
-            }}
           />
         );
       })}
@@ -459,24 +623,36 @@ const EditorAnexo1 = ({ companies = initialCompanies }) => {
 
 // Componente Panel de Evidencias
 function PanelEvidencias({ itemId, anexoId, empresaId, onCerrar, onSubirEvidencia }) {
-  const [archivoSeleccionado, setArchivoSeleccionado] = useState(null);
+  const [archivosSeleccionados, setArchivosSeleccionados] = useState([]);
+  const [tipoEvidencia, setTipoEvidencia] = useState('general');
+  const [trabajadorSeleccionado, setTrabajadorSeleccionado] = useState('');
+  const [areaTexto, setAreaTexto] = useState('');
   const evidenciasItem = getEvidenciasByItem(itemId, anexoId);
 
   const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setArchivoSeleccionado(file);
+    const files = Array.from(e.target.files);
+    if (files.length > 0) {
+      setArchivosSeleccionados(prev => [...prev, ...files]);
     }
   };
 
   const handleSubir = () => {
-    if (archivoSeleccionado) {
-      onSubirEvidencia(itemId, archivoSeleccionado);
-      setArchivoSeleccionado(null);
+    if (archivosSeleccionados.length > 0) {
+      archivosSeleccionados.forEach(archivo => {
+        onSubirEvidencia(itemId, archivo, tipoEvidencia, trabajadorSeleccionado, areaTexto);
+      });
+      setArchivosSeleccionados([]);
+      setTipoEvidencia('general');
+      setTrabajadorSeleccionado('');
+      setAreaTexto('');
       // Resetear el input
       const input = document.getElementById('file-input-evidencias');
       if (input) input.value = '';
     }
+  };
+
+  const handleEliminarArchivo = (index) => {
+    setArchivosSeleccionados(prev => prev.filter((_, i) => i !== index));
   };
 
   return (
@@ -497,27 +673,82 @@ function PanelEvidencias({ itemId, anexoId, empresaId, onCerrar, onSubirEvidenci
         {/* Formulario de subida */}
         <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Seleccionar archivo
+            Seleccionar archivos (múltiples)
           </label>
           <input
             id="file-input-evidencias"
             type="file"
             accept=".pdf,.jpg,.jpeg,.png"
+            multiple
             onChange={handleFileChange}
             className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-primary-dark"
           />
-          {archivoSeleccionado && (
-            <div className="mt-2 text-sm text-gray-600">
-              <p>Archivo: {archivoSeleccionado.name}</p>
-              <p>Tamaño: {(archivoSeleccionado.size / 1024).toFixed(2)} KB</p>
+          
+          {/* Lista de archivos seleccionados */}
+          {archivosSeleccionados.length > 0 && (
+            <div className="mt-3 space-y-2">
+              {archivosSeleccionados.map((archivo, index) => (
+                <div key={index} className="flex items-center justify-between p-2 bg-white border border-gray-200 rounded">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-gray-800 truncate">{archivo.name}</p>
+                    <p className="text-xs text-gray-500">{(archivo.size / 1024).toFixed(2)} KB</p>
+                  </div>
+                  <button
+                    onClick={() => handleEliminarArchivo(index)}
+                    className="ml-2 text-red-500 hover:text-red-700"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              ))}
             </div>
           )}
+
+          {/* Clasificación de evidencia */}
+          <div className="mt-4 space-y-3">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Tipo de Evidencia
+            </label>
+            <select
+              value={tipoEvidencia}
+              onChange={(e) => setTipoEvidencia(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm"
+            >
+              <option value="general">General de empresa</option>
+              <option value="trabajador">Evidencia para trabajador</option>
+              <option value="area">Evidencia para área</option>
+              <option value="documento-dinamico">Evidencia de documento dinámico</option>
+            </select>
+
+            {tipoEvidencia === 'trabajador' && (
+              <input
+                type="text"
+                placeholder="Nombre o cédula del trabajador"
+                value={trabajadorSeleccionado}
+                onChange={(e) => setTrabajadorSeleccionado(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm"
+              />
+            )}
+
+            {tipoEvidencia === 'area' && (
+              <input
+                type="text"
+                placeholder="Nombre del área"
+                value={areaTexto}
+                onChange={(e) => setAreaTexto(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-sm"
+              />
+            )}
+          </div>
+
           <button
             onClick={handleSubir}
-            disabled={!archivoSeleccionado}
-            className="mt-3 w-full px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+            disabled={archivosSeleccionados.length === 0}
+            className="mt-4 w-full px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
           >
-            Subir Evidencia
+            Subir {archivosSeleccionados.length > 0 ? `${archivosSeleccionados.length} ` : ''}Evidencia{archivosSeleccionados.length > 1 ? 's' : ''}
           </button>
         </div>
 
@@ -621,11 +852,30 @@ function SeccionDatos({ seccion, datosGenerales, onChange, isExpanded, onToggle 
 }
 
 // Componente para fila del checklist
-function FilaChecklist({ item, value, onChange, categoriaGeneral, isFirstRow, totalRows, empresaId, anexoId, numeroTrabajadores, onAbrirPanelEvidencias, onGenerarTarea }) {
-  const [showAcciones, setShowAcciones] = useState(false);
-  const evidenciasItem = getEvidenciasByItem(item.id, anexoId);
-  const tareasItem = getTareasByItem(item.id);
+function FilaChecklist({ item, value, onChange, categoriaGeneral, isFirstRow, totalRows, empresaId, anexoId, numeroTrabajadores }) {
+  const navigate = useNavigate();
+  const anexoIdNum = anexoId ? parseInt(anexoId) : null;
+  const evidenciasItem = getEvidenciasByItem(item.id, anexoIdNum);
+  const evidenciasEmpresa = getEvidenciasEmpresaByItem(item.id, anexoIdNum);
+  const evidenciasTrabajadores = getEvidenciasTrabajadoresByItem(item.id, anexoIdNum);
+  const capacitacionesItem = getCapacitacionesByItem(item.id);
+  const evaluacionesItem = getEvaluacionesByItem(item.id);
   const documentosVinculados = getDocumentosByItem(item.id);
+  
+  // Calcular estado del ítem
+  const estadoItem = useMemo(() => {
+    if (!value || !value.estado) return 'sin-estado';
+    if (value.estado === 'CUMPLE') return 'cumple';
+    if (value.estado === 'NO_CUMPLE') return 'no-cumple';
+    if (value.estado === 'NA') return 'no-aplica';
+    
+    // Si está en progreso (tiene evidencias, capacitaciones o evaluaciones pero no cumple)
+    if (evidenciasItem.length > 0 || capacitacionesItem.length > 0 || evaluacionesItem.length > 0) {
+      return 'en-progreso';
+    }
+    
+    return 'sin-estado';
+  }, [value, evidenciasItem.length, capacitacionesItem.length, evaluacionesItem.length]);
 
   // Detectar si el ítem debe ser NA automáticamente según número de trabajadores
   const debeSerNA = useMemo(() => {
@@ -715,22 +965,62 @@ function FilaChecklist({ item, value, onChange, categoriaGeneral, isFirstRow, to
             ))}
           </ul>
         )}
-        {/* Badges de evidencias y documentos vinculados */}
+        {/* Badges de estado y acciones */}
         <div className="flex flex-wrap gap-1 mt-2">
-          {evidenciasItem.length > 0 && (
+          {/* Estado visual del ítem */}
+          {estadoItem === 'cumple' && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[8px] bg-green-100 text-green-800 rounded-full font-semibold">
+              ✓ CUMPLE
+            </span>
+          )}
+          {estadoItem === 'no-cumple' && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[8px] bg-red-100 text-red-800 rounded-full font-semibold">
+              ✗ NO CUMPLE
+            </span>
+          )}
+          {estadoItem === 'en-progreso' && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[8px] bg-yellow-100 text-yellow-800 rounded-full font-semibold">
+              ⏳ EN PROGRESO
+            </span>
+          )}
+          
+          {/* Evidencias de empresa */}
+          {evidenciasEmpresa.length > 0 && (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[8px] bg-blue-100 text-blue-800 rounded-full">
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
               </svg>
-              Evidencias ({evidenciasItem.length})
+              Evidencia Empresa: ✔
             </span>
           )}
-          {documentosVinculados.length > 0 && (
+          
+          {/* Evidencias de trabajadores */}
+          {evidenciasTrabajadores.length > 0 && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[8px] bg-indigo-100 text-indigo-800 rounded-full">
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
+              Evidencias Trabajadores: {evidenciasTrabajadores.length} subidas
+            </span>
+          )}
+          
+          {/* Capacitación programada */}
+          {capacitacionesItem.length > 0 && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[8px] bg-green-100 text-green-800 rounded-full">
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+              </svg>
+              Capacitación programada
+            </span>
+          )}
+          
+          {/* Evaluación activa */}
+          {evaluacionesItem.length > 0 && (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[8px] bg-purple-100 text-purple-800 rounded-full">
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
               </svg>
-              Documentos ({documentosVinculados.length})
+              Evaluación activa – {evaluacionesItem.filter(e => e.estado === 'Activa').length}/{evaluacionesItem.length} activas
             </span>
           )}
         </div>
@@ -771,77 +1061,47 @@ function FilaChecklist({ item, value, onChange, categoriaGeneral, isFirstRow, to
           rows={2}
         />
       </td>
-      <td className="border border-gray-300 p-2 align-middle w-[3%] bg-white">
-        <div className="relative">
+      <td className="border border-gray-300 p-2 align-middle w-[15%] bg-white">
+        <div className="flex flex-col gap-1">
           <button
-            onClick={() => setShowAcciones(!showAcciones)}
-            className="w-8 h-8 flex items-center justify-center rounded hover:bg-gray-100 transition-colors"
-            title="Acciones"
+            onClick={() => {
+              const anexoParam = anexoId ? `?anexo=${anexoId}` : '';
+              navigate(`/anexo1/empresa/${empresaId}/item/${item.id}/evidencias${anexoParam}`);
+            }}
+            className="w-full px-2 py-1 text-[9px] bg-blue-100 text-blue-800 rounded hover:bg-blue-200 transition-colors flex items-center justify-center gap-1"
+            title="Gestionar Evidencias"
           >
-            <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
             </svg>
+            Evidencias
           </button>
-          {showAcciones && (
-            <div className="absolute right-0 top-10 z-10 bg-white border border-gray-300 rounded-lg shadow-lg min-w-[200px]">
-              <div className="py-1">
-                <button
-                  onClick={() => {
-                    if (onAbrirPanelEvidencias) {
-                      onAbrirPanelEvidencias(item.id);
-                    }
-                    setShowAcciones(false);
-                  }}
-                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                  </svg>
-                  {evidenciasItem.length > 0 ? `Ver/Subir Evidencias (${evidenciasItem.length})` : 'Subir Evidencia'}
-                </button>
-                <button
-                  onClick={() => {
-                    if (onGenerarTarea) {
-                      onGenerarTarea(item.id, item.texto);
-                    }
-                    setShowAcciones(false);
-                  }}
-                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                  </svg>
-                  Generar Tarea
-                </button>
-                <button
-                  onClick={() => {
-                    // TODO: Implementar vinculación de documentos dinámicos
-                    setShowAcciones(false);
-                  }}
-                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                  </svg>
-                  Vincular Documento Dinámico
-                </button>
-                {tareasItem.length > 0 && (
-                  <button
-                    onClick={() => {
-                      window.location.href = `/anexo1/tareas?empresa=${empresaId}&item=${item.id}`;
-                      setShowAcciones(false);
-                    }}
-                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    Ver Tareas ({tareasItem.length})
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
+          <button
+            onClick={() => {
+              const anexoParam = anexoId ? `?anexo=${anexoId}` : '';
+              navigate(`/anexo1/empresa/${empresaId}/item/${item.id}/capacitacion${anexoParam}`);
+            }}
+            className="w-full px-2 py-1 text-[9px] bg-green-100 text-green-800 rounded hover:bg-green-200 transition-colors flex items-center justify-center gap-1"
+            title="Crear Capacitación"
+          >
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+            </svg>
+            Capacitación
+          </button>
+          <button
+            onClick={() => {
+              const anexoParam = anexoId ? `?anexo=${anexoId}` : '';
+              navigate(`/anexo1/empresa/${empresaId}/item/${item.id}/evaluacion${anexoParam}`);
+            }}
+            className="w-full px-2 py-1 text-[9px] bg-purple-100 text-purple-800 rounded hover:bg-purple-200 transition-colors flex items-center justify-center gap-1"
+            title="Crear Evaluación"
+          >
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+            </svg>
+            Evaluación
+          </button>
         </div>
       </td>
     </tr>
@@ -849,7 +1109,7 @@ function FilaChecklist({ item, value, onChange, categoriaGeneral, isFirstRow, to
 }
 
 // Componente para sección de checklist
-function SeccionChecklist({ seccion, items, respuestas, onChange, isExpanded, onToggle, empresaId, anexoId, numeroTrabajadores, onAbrirPanelEvidencias, onGenerarTarea }) {
+function SeccionChecklist({ seccion, items, respuestas, onChange, isExpanded, onToggle, empresaId, anexoId, numeroTrabajadores }) {
   return (
     <section className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
       <button
@@ -914,10 +1174,8 @@ function SeccionChecklist({ seccion, items, respuestas, onChange, isExpanded, on
                   isFirstRow={index === 0}
                   totalRows={items.length}
                   empresaId={empresaId}
-                  anexoId={anexoId}
+                  anexoId={anexoId ? anexoId.toString() : null}
                   numeroTrabajadores={numeroTrabajadores}
-                  onAbrirPanelEvidencias={onAbrirPanelEvidencias}
-                  onGenerarTarea={onGenerarTarea}
                 />
               ))}
             </tbody>

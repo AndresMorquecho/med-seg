@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import Login from './pages/Login';
@@ -10,6 +10,7 @@ import Documents from './pages/Documents';
 import SeleccionarEmpresaView from './pages/SeleccionarEmpresaView';
 import Repository from './pages/Repository';
 import UsuarioDocumentos from './pages/UsuarioDocumentos';
+import PortalEmpresa from './pages/PortalEmpresa';
 import ResponderEvaluacionPage from './pages/ResponderEvaluacionPage';
 import Settings from './pages/Settings';
 import { initialCompanies } from './data/companiesData';
@@ -19,23 +20,38 @@ import { initialProfesionales } from './data/profesionalesData';
 import { mockDocuments } from './data/mockDocuments';
 import EstablecimientosSalud from './pages/EstablecimientosSalud';
 import Profesionales from './pages/Profesionales';
-import Capacitaciones from './pages/Capacitaciones';
-import Evaluaciones from './pages/Evaluaciones';
 import EnviarEvaluacionPage from './pages/EnviarEvaluacionPage';
 import SeguimientoEvaluacion from './pages/SeguimientoEvaluacion';
-import ControlResultados from './pages/ControlResultados';
+import EmpresaCapacitaciones from './pages/EmpresaCapacitaciones';
+import EmpresaEvaluaciones from './pages/EmpresaEvaluaciones';
+import EmpresaResultados from './pages/EmpresaResultados';
 import Anexo1 from './pages/Anexo1';
 import GestionAnexo1 from './pages/GestionAnexo1';
 import EditorAnexo1 from './pages/EditorAnexo1';
-import AnalisisAnexo1 from './pages/AnalisisAnexo1';
 import DocumentosInSitu from './pages/DocumentosInSitu';
 import HistoricoAnexo1 from './pages/HistoricoAnexo1';
-import TareasAnexo1 from './pages/TareasAnexo1';
+import GestionEvidenciasItem from './pages/GestionEvidenciasItem';
+import CrearCapacitacionItem from './pages/CrearCapacitacionItem';
+import CrearEvaluacionItem from './pages/CrearEvaluacionItem';
 import EmpresaView from './pages/EmpresaView';
 import EmpresaAnexo1View from './pages/EmpresaAnexo1View';
 import EmpresaAnexo1Estado from './pages/EmpresaAnexo1Estado';
 import EmpresaRepositorio from './pages/EmpresaRepositorio';
 import EmpresaFormulariosDinamicos from './pages/EmpresaFormulariosDinamicos';
+import FormulariosDinamicos from './pages/FormulariosDinamicos';
+import RepositorioGeneral from './pages/RepositorioGeneral';
+import EmpresaDocumentos from './pages/EmpresaDocumentos';
+import FormulariosDinamicosEmpresa from './pages/FormulariosDinamicosEmpresa';
+import MatrizEmpleados from './pages/MatrizEmpleados';
+
+// Componente para redirigir rutas directas del editor a rutas anidadas
+const EditorRedirect = () => {
+  const { empresaId, anexoId } = useParams();
+  if (anexoId) {
+    return <Navigate to={`/anexo1/empresa/${empresaId}/editor/${anexoId}`} replace />;
+  }
+  return <Navigate to={`/anexo1/empresa/${empresaId}/editor`} replace />;
+};
 
 function App() {
   const [companies, setCompanies] = useState(initialCompanies);
@@ -75,9 +91,17 @@ function App() {
     return children;
   };
 
-  // Componente para rutas de usuario
+  // Componente para rutas de usuario (trabajador)
   const UserRoute = ({ children }) => {
     if (!currentUser || currentUser.tipo !== 'user') {
+      return <Navigate to="/login" replace />;
+    }
+    return children;
+  };
+
+  // Componente para rutas de empresa
+  const EmpresaRoute = ({ children }) => {
+    if (!currentUser || currentUser.tipo !== 'empresa') {
       return <Navigate to="/login" replace />;
     }
     return children;
@@ -93,12 +117,15 @@ function App() {
             currentUser ? (
               currentUser.tipo === 'admin' ? (
                 <Navigate to="/dashboard" replace />
-              ) : (
-                <Navigate to="/usuario/documentos" replace />
-              )
+            ) : currentUser?.tipo === 'empresa' ? (
+              <Navigate to="/portal-empresa" replace />
+            ) : (
+              <Navigate to="/usuario/documentos" replace />
+            )
             ) : (
               <Login 
-                employees={employees} 
+                employees={employees}
+                companies={companies}
                 onLogin={handleLogin}
               />
             )
@@ -170,24 +197,147 @@ function App() {
                           } 
                         />
                         <Route 
-                          path="establecimientos" 
+                          path="documentos" 
                           element={
                             <ProtectedRoute>
-                              <EstablecimientosSalud 
-                                establecimientos={establecimientos}
-                                setEstablecimientos={setEstablecimientos}
-                              />
+                              <EmpresaDocumentos companies={companies} />
+                            </ProtectedRoute>
+                          } 
+                        />
+                      </Route>
+                      {/* Módulo Gestión del Anexo 1 - SST */}
+                      <Route 
+                        path="/anexo1" 
+                        element={
+                          <ProtectedRoute>
+                            <GestionAnexo1 companies={companies} />
+                          </ProtectedRoute>
+                        } 
+                      />
+                      {/* Rutas anidadas bajo /anexo1/empresa/:empresaId */}
+                      <Route 
+                        path="/anexo1/empresa/:empresaId" 
+                        element={
+                          <ProtectedRoute>
+                            <EmpresaAnexo1View companies={companies} />
+                          </ProtectedRoute>
+                        } 
+                      >
+                        <Route 
+                          index
+                          element={
+                            <EmpresaAnexo1Estado companies={companies} />
+                          } 
+                        />
+                        <Route 
+                          path="estado" 
+                          element={
+                            <EmpresaAnexo1Estado companies={companies} />
+                          } 
+                        />
+                        <Route 
+                          path="checklist" 
+                          element={
+                            <EditorAnexo1 companies={companies} />
+                          } 
+                        />
+                        <Route 
+                          path="editor" 
+                          element={
+                            <EditorAnexo1 companies={companies} />
+                          } 
+                        />
+                        <Route 
+                          path="editor/:anexoId" 
+                          element={
+                            <EditorAnexo1 companies={companies} />
+                          } 
+                        />
+                        <Route 
+                          path="formularios-dinamicos" 
+                          element={
+                            <ProtectedRoute>
+                              <FormulariosDinamicosEmpresa companies={companies} employees={employees} />
                             </ProtectedRoute>
                           } 
                         />
                         <Route 
-                          path="profesionales" 
+                          path="matriz-empleados" 
                           element={
                             <ProtectedRoute>
-                              <Profesionales 
-                                profesionales={profesionales}
-                                setProfesionales={setProfesionales}
-                              />
+                              <MatrizEmpleados companies={companies} employees={employees} />
+                            </ProtectedRoute>
+                          } 
+                        />
+                        <Route 
+                          path="item/:itemId/evidencias" 
+                          element={
+                            <ProtectedRoute>
+                              <GestionEvidenciasItem companies={companies} employees={employees} />
+                            </ProtectedRoute>
+                          } 
+                        />
+                        <Route 
+                          path="item/:itemId/capacitacion" 
+                          element={
+                            <ProtectedRoute>
+                              <CrearCapacitacionItem companies={companies} employees={employees} profesionales={profesionales} />
+                            </ProtectedRoute>
+                          } 
+                        />
+                        <Route 
+                          path="item/:itemId/evaluacion" 
+                          element={
+                            <ProtectedRoute>
+                              <CrearEvaluacionItem companies={companies} employees={employees} />
+                            </ProtectedRoute>
+                          } 
+                        />
+                        <Route 
+                          path="historial" 
+                          element={
+                            <ProtectedRoute>
+                              <HistoricoAnexo1 companies={companies} />
+                            </ProtectedRoute>
+                          } 
+                        />
+                        <Route 
+                          path="capacitaciones" 
+                          element={
+                            <ProtectedRoute>
+                              <EmpresaCapacitaciones companies={companies} employees={employees} />
+                            </ProtectedRoute>
+                          } 
+                        />
+                        <Route 
+                          path="evaluaciones" 
+                          element={
+                            <ProtectedRoute>
+                              <EmpresaEvaluaciones companies={companies} employees={employees} />
+                            </ProtectedRoute>
+                          } 
+                        />
+                        <Route 
+                          path="evaluaciones/enviar/:evaluacionId" 
+                          element={
+                            <ProtectedRoute>
+                              <EnviarEvaluacionPage companies={companies} employees={employees} />
+                            </ProtectedRoute>
+                          } 
+                        />
+                        <Route 
+                          path="evaluaciones/seguimiento/:evaluacionId" 
+                          element={
+                            <ProtectedRoute>
+                              <SeguimientoEvaluacion companies={companies} employees={employees} />
+                            </ProtectedRoute>
+                          } 
+                        />
+                        <Route 
+                          path="resultados" 
+                          element={
+                            <ProtectedRoute>
+                              <EmpresaResultados employees={employees} companies={companies} />
                             </ProtectedRoute>
                           } 
                         />
@@ -199,93 +349,34 @@ function App() {
                             </ProtectedRoute>
                           } 
                         />
-                        <Route 
-                          path="formularios" 
-                          element={
-                            <ProtectedRoute>
-                              <EmpresaFormulariosDinamicos companies={companies} employees={employees} />
-                            </ProtectedRoute>
-                          } 
-                        />
-                        {/* Rutas anidadas bajo /empresas/:empresaId/anexo1 */}
-                        <Route 
-                          path="anexo1" 
-                          element={
-                            <ProtectedRoute>
-                              <EmpresaAnexo1View companies={companies} />
-                            </ProtectedRoute>
-                          } 
-                        >
-                          <Route 
-                            index
-                            element={
-                              <EmpresaAnexo1Estado companies={companies} />
-                            } 
-                          />
-                          <Route 
-                            path="estado" 
-                            element={
-                              <EmpresaAnexo1Estado companies={companies} />
-                            } 
-                          />
-                          <Route 
-                            path="checklist" 
-                            element={
-                              <EditorAnexo1 companies={companies} />
-                            } 
-                          />
-                          <Route 
-                            path="tareas" 
-                            element={
-                              <ProtectedRoute>
-                                <TareasAnexo1 companies={companies} />
-                              </ProtectedRoute>
-                            } 
-                          />
-                          <Route 
-                            path="documentos-requeridos" 
-                            element={
-                              <EmpresaRepositorio companies={companies} />
-                            } 
-                          />
-                          <Route 
-                            path="documentos-in-situ" 
-                            element={
-                              <ProtectedRoute>
-                                <DocumentosInSitu companies={companies} />
-                              </ProtectedRoute>
-                            } 
-                          />
-                          <Route 
-                            path="historial" 
-                            element={
-                              <ProtectedRoute>
-                                <HistoricoAnexo1 companies={companies} />
-                              </ProtectedRoute>
-                            } 
-                          />
-                          <Route 
-                            path="analitica" 
-                            element={
-                              <ProtectedRoute>
-                                <AnalisisAnexo1 companies={companies} />
-                              </ProtectedRoute>
-                            } 
-                          />
-                        </Route>
                       </Route>
+                      {/* Rutas directas del editor del Anexo 1 - Redirigen a rutas anidadas */}
                       <Route 
-                        path="/employees" 
+                        path="/anexo1/editor/:empresaId" 
                         element={
                           <ProtectedRoute>
-                            <Employees 
-                              employees={employees}
-                              setEmployees={setEmployees}
-                              companies={companies}
-                            />
+                            <EditorRedirect />
                           </ProtectedRoute>
                         } 
                       />
+                      <Route 
+                        path="/anexo1/editor/:empresaId/:anexoId" 
+                        element={
+                          <ProtectedRoute>
+                            <EditorRedirect />
+                          </ProtectedRoute>
+                        } 
+                      />
+                      {/* Módulo Formularios y Registros Dinámicos */}
+                      <Route 
+                        path="/formularios" 
+                        element={
+                          <ProtectedRoute>
+                            <FormulariosDinamicos companies={companies} employees={employees} />
+                          </ProtectedRoute>
+                        } 
+                      />
+                      {/* Módulo Establecimientos de Salud */}
                       <Route 
                         path="/establecimientos-salud" 
                         element={
@@ -297,6 +388,7 @@ function App() {
                           </ProtectedRoute>
                         } 
                       />
+                      {/* Módulo Profesionales */}
                       <Route 
                         path="/profesionales" 
                         element={
@@ -308,55 +400,22 @@ function App() {
                           </ProtectedRoute>
                         } 
                       />
+                      {/* Módulo Repositorio General */}
                       <Route 
-                        path="/capacitaciones" 
+                        path="/repositorio" 
                         element={
                           <ProtectedRoute>
-                            <Capacitaciones 
-                              companies={companies}
-                            />
+                            <RepositorioGeneral companies={companies} />
                           </ProtectedRoute>
                         } 
                       />
                       <Route 
-                        path="/evaluaciones" 
+                        path="/employees" 
                         element={
                           <ProtectedRoute>
-                            <Evaluaciones 
-                              companies={companies}
+                            <Employees 
                               employees={employees}
-                            />
-                          </ProtectedRoute>
-                        } 
-                      />
-                      <Route 
-                        path="/evaluaciones/enviar/:evaluacionId" 
-                        element={
-                          <ProtectedRoute>
-                            <EnviarEvaluacionPage 
-                              companies={companies}
-                              employees={employees}
-                            />
-                          </ProtectedRoute>
-                        } 
-                      />
-                      <Route 
-                        path="/evaluaciones/seguimiento/:evaluacionId" 
-                        element={
-                          <ProtectedRoute>
-                            <SeguimientoEvaluacion 
-                              companies={companies}
-                              employees={employees}
-                            />
-                          </ProtectedRoute>
-                        } 
-                      />
-                      <Route 
-                        path="/control-resultados" 
-                        element={
-                          <ProtectedRoute>
-                            <ControlResultados 
-                              employees={employees}
+                              setEmployees={setEmployees}
                               companies={companies}
                             />
                           </ProtectedRoute>
@@ -438,14 +497,6 @@ function App() {
                         } 
                       />
                       <Route 
-                        path="/anexo1/analisis/:empresaId/:anexoId" 
-                        element={
-                          <ProtectedRoute>
-                            <AnalisisAnexo1 companies={companies} />
-                          </ProtectedRoute>
-                        } 
-                      />
-                      <Route 
                         path="/anexo1/documentos/:empresaId" 
                         element={
                           <ProtectedRoute>
@@ -458,14 +509,6 @@ function App() {
                         element={
                           <ProtectedRoute>
                             <HistoricoAnexo1 companies={companies} />
-                          </ProtectedRoute>
-                        } 
-                      />
-                      <Route 
-                        path="/anexo1/tareas" 
-                        element={
-                          <ProtectedRoute>
-                            <TareasAnexo1 companies={companies} />
                           </ProtectedRoute>
                         } 
                       />
@@ -518,6 +561,35 @@ function App() {
                     <Route 
                       path="/*" 
                       element={<Navigate to="/usuario/documentos" replace />}
+                    />
+                  </Routes>
+                </main>
+              </div>
+            }
+          />
+        ) : currentUser?.tipo === 'empresa' ? (
+          <Route
+            path="/*"
+            element={
+              <div className="min-h-screen bg-gray-50">
+                {currentUser && <Header currentUser={currentUser} onLogout={handleLogout} isUserView={true} />}
+                <main>
+                  <Routes>
+                    <Route 
+                      path="/portal-empresa" 
+                      element={
+                        <EmpresaRoute>
+                          <PortalEmpresa 
+                            user={currentUser}
+                            companies={companies}
+                            employees={employees}
+                          />
+                        </EmpresaRoute>
+                      } 
+                    />
+                    <Route 
+                      path="/*" 
+                      element={<Navigate to="/portal-empresa" replace />}
                     />
                   </Routes>
                 </main>

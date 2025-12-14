@@ -22,8 +22,14 @@ const EmpresaAnexo1View = ({ companies = initialCompanies }) => {
   useEffect(() => {
     const pathParts = location.pathname.split('/');
     const lastPart = pathParts[pathParts.length - 1];
-    if (lastPart && lastPart !== 'anexo1' && lastPart !== empresaId) {
+    
+    // Detectar si está en el editor
+    if (location.pathname.includes('/editor')) {
+      setActiveTab('checklist');
+    } else if (lastPart && lastPart !== 'anexo1' && lastPart !== empresaId && !pathParts.includes('editor')) {
       setActiveTab(lastPart);
+    } else if (pathParts[pathParts.length - 1] === empresaId || pathParts[pathParts.length - 2] === 'empresa') {
+      setActiveTab('estado');
     }
   }, [location.pathname, empresaId]);
 
@@ -54,11 +60,13 @@ const EmpresaAnexo1View = ({ companies = initialCompanies }) => {
   const tabs = [
     { id: 'estado', label: 'Estado General', icon: null },
     { id: 'checklist', label: 'Checklist Anexo 1', icon: null },
-    { id: 'tareas', label: `Tareas (${tareasPendientes})`, icon: null },
-    { id: 'documentos-requeridos', label: 'Documentos Requeridos', icon: null },
-    { id: 'documentos-in-situ', label: 'Documentos In Situ', icon: null },
+    { id: 'formularios-dinamicos', label: 'Formularios Dinámicos', icon: null },
+    { id: 'matriz-empleados', label: 'Matriz de Empleados', icon: null },
+    { id: 'capacitaciones', label: 'Capacitaciones', icon: null },
+    { id: 'evaluaciones', label: 'Evaluaciones', icon: null },
+    { id: 'resultados', label: 'Resultados', icon: null },
     { id: 'historial', label: 'Historial de Inspecciones', icon: null },
-    { id: 'analitica', label: 'Analítica', icon: null }
+    { id: 'repositorio', label: 'Repositorio', icon: null }
   ];
 
   const handleTabChange = (tabId) => {
@@ -66,49 +74,49 @@ const EmpresaAnexo1View = ({ companies = initialCompanies }) => {
     if (tabId === 'checklist') {
       // Si hay un anexo existente, editar ese, sino crear uno nuevo
       if (anexoActual) {
-        navigate(`/anexo1/editor/${empresaId}/${anexoActual.id}`);
+        navigate(`/anexo1/empresa/${empresaId}/editor/${anexoActual.id}`);
       } else {
-        navigate(`/anexo1/editor/${empresaId}`);
+        navigate(`/anexo1/empresa/${empresaId}/editor`);
       }
     } else {
-      navigate(`/empresas/${empresaId}/anexo1/${tabId}`);
+      navigate(`/anexo1/empresa/${empresaId}/${tabId}`);
     }
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <div className="flex items-center justify-between">
-          <div>
+    <div className="space-y-3">
+      {/* Header compacto */}
+      <div className="bg-white rounded-lg shadow-sm border-b border-gray-200">
+        <div className="flex items-center justify-between px-4 py-3">
+          <div className="flex items-center gap-3">
             <button
-              onClick={() => navigate(`/empresas/${empresaId}`)}
-              className="flex items-center gap-2 text-gray-600 hover:text-gray-800 mb-4 transition-colors"
+              onClick={() => navigate(`/anexo1`)}
+              className="flex items-center gap-1.5 text-gray-500 hover:text-gray-700 transition-colors text-sm"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
-              Volver a {empresa.name}
+              Volver
             </button>
-            <h1 className="text-3xl font-bold text-gray-800 flex items-center gap-3">
-              <ClipboardList className="w-8 h-8 text-primary" />
+            <div className="h-4 w-px bg-gray-300"></div>
+            <h1 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+              <ClipboardList className="w-5 h-5 text-primary" />
               Gestión del Anexo 1 - SST
             </h1>
-            <p className="text-gray-600 mt-1">{empresa.name}</p>
+            <div className="h-4 w-px bg-gray-300"></div>
+            <span className="text-sm text-gray-600">{empresa.name}</span>
           </div>
         </div>
-      </div>
 
-      {/* Tabs de navegación */}
-      <div className="bg-white rounded-lg shadow-md">
-        <div className="border-b border-gray-200">
+        {/* Tabs de navegación integrados */}
+        <div className="border-t border-gray-200">
           <nav className="flex -mb-px overflow-x-auto">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => handleTabChange(tab.id)}
                 className={`
-                  px-6 py-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap
+                  px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap
                   ${activeTab === tab.id
                     ? 'border-primary text-primary'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'

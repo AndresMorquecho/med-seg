@@ -33,6 +33,7 @@ const Capacitaciones = ({ companies }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterEstado, setFilterEstado] = useState('Todos');
   const [filterActividad, setFilterActividad] = useState('Todas');
+  const [filterEmpresa, setFilterEmpresa] = useState('Todas');
 
   const capacitacionesFiltradas = useMemo(() => {
     return capacitaciones.filter(cap => {
@@ -40,9 +41,12 @@ const Capacitaciones = ({ companies }) => {
                          cap.descripcion.toLowerCase().includes(searchTerm.toLowerCase());
       const matchEstado = filterEstado === 'Todos' || cap.estado === filterEstado;
       const matchActividad = filterActividad === 'Todas' || cap.actividadRelacionada === filterActividad;
-      return matchSearch && matchEstado && matchActividad;
+      const matchEmpresa = filterEmpresa === 'Todas' || 
+                          (cap.empresaId && cap.empresaId === parseInt(filterEmpresa)) ||
+                          (cap.empresasAsignadas && cap.empresasAsignadas.includes(parseInt(filterEmpresa)));
+      return matchSearch && matchEstado && matchActividad && matchEmpresa;
     });
-  }, [capacitaciones, searchTerm, filterEstado, filterActividad]);
+  }, [capacitaciones, searchTerm, filterEstado, filterActividad, filterEmpresa]);
 
   const handleAddCapacitacion = (newCapacitacion) => {
     setCapacitaciones([...capacitaciones, newCapacitacion]);
@@ -127,7 +131,7 @@ const Capacitaciones = ({ companies }) => {
 
       {/* Filtros y búsqueda */}
       <div className="bg-white rounded-lg shadow-md p-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="relative">
             <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input
@@ -156,6 +160,19 @@ const Capacitaciones = ({ companies }) => {
             <option value="Todas">Todas las actividades</option>
             {actividadesDisponibles.map(actividad => (
               <option key={actividad} value={actividad}>{actividad}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Empresa</label>
+          <select
+            value={filterEmpresa}
+            onChange={(e) => setFilterEmpresa(e.target.value)}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+          >
+            <option value="Todas">Todas las empresas</option>
+            {companies.map(emp => (
+              <option key={emp.id} value={emp.id}>{emp.name}</option>
             ))}
           </select>
         </div>

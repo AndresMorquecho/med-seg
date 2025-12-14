@@ -8,6 +8,11 @@ export let evaluaciones = [
     fechaCreacion: '2025-01-10',
     fechaLimite: '2025-02-20',
     estado: 'Activa', // Ya está activa porque fue enviada
+    anexo1ItemId: null, // ID del ítem del Anexo 1 relacionado
+    anexo1Id: null, // ID del Anexo 1 relacionado
+    empresaId: 1, // ID de la empresa
+    empresasAsignadas: [1], // IDs de empresas
+    trabajadoresAsignados: [], // IDs de trabajadores
     preguntas: [
       {
         id: 1,
@@ -48,6 +53,11 @@ export let evaluaciones = [
     fechaCreacion: '2025-01-12',
     fechaLimite: '2025-02-25',
     estado: 'Activa', // Ya está activa porque fue enviada
+    anexo1ItemId: null,
+    anexo1Id: null,
+    empresaId: 3,
+    empresasAsignadas: [3],
+    trabajadoresAsignados: [],
     preguntas: [
       {
         id: 1,
@@ -112,6 +122,8 @@ export let respuestasEvaluaciones = [
     empresaId: 1,
     fechaRespuesta: '2025-01-15T10:30:00',
     estado: 'Respondida',
+    completada: true,
+    puntaje: 100,
     respuestas: [
       {
         preguntaId: 1,
@@ -131,6 +143,8 @@ export let respuestasEvaluaciones = [
     ],
     calificacion: 10, // Sobre 10 puntos
     porcentaje: 100,
+    completada: true,
+    puntaje: 100,
   },
   {
     id: 2,
@@ -144,4 +158,33 @@ export let respuestasEvaluaciones = [
     porcentaje: null,
   },
 ];
+
+export const estadosEvaluacion = ['Borrador', 'Activa', 'Finalizada'];
+
+// Función para obtener evaluaciones por ítem del Anexo 1
+export const getEvaluacionesByItem = (itemId) => {
+  return evaluaciones.filter(e => e.anexo1ItemId === itemId);
+};
+
+// Función para crear una evaluación desde un ítem del Anexo 1
+export const crearEvaluacionDesdeItem = (itemId, anexo1Id, empresaId, datos) => {
+  const nuevaEvaluacion = {
+    id: evaluaciones.length > 0 ? Math.max(...evaluaciones.map(e => e.id)) + 1 : 1,
+    nombre: datos.nombre || `Evaluación para ítem ${itemId}`,
+    descripcion: datos.descripcion || '',
+    fechaCreacion: new Date().toISOString().split('T')[0],
+    fechaLimite: datos.fechaLimite || null,
+    estado: 'Borrador',
+    preguntas: datos.preguntas || [],
+    trabajadoresAsignados: datos.trabajadores || [],
+    anexo1ItemId: itemId,
+    anexo1Id: anexo1Id,
+    empresaId: empresaId,
+    capacitacionId: datos.capacitacionId || null,
+    linkUnico: `EVAL-${itemId}-${Date.now()}`,
+    codigoAcceso: `EVAL${itemId}`,
+  };
+  evaluaciones.push(nuevaEvaluacion);
+  return nuevaEvaluacion;
+};
 

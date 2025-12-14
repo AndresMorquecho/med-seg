@@ -1,8 +1,10 @@
-import { useState, useRef, useMemo } from 'react';
+import { useState, useRef, useMemo, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { initialCompanies } from '../data/companiesData';
-import { anexos1, getAnexosByEmpresa } from '../data/anexo1Data';
-import { evidencias, getEvidenciasByEmpresa, aprobarEvidencia, rechazarEvidencia } from '../data/evidenciasData';
+import { initialEmployees } from '../data/employeesData';
+import { evidencias, getEvidenciasByEmpresa, publicarEvidencia, eliminarEvidencia } from '../data/evidenciasData';
+import { getDocumentosByEmpresa, publicarDocumentoDinamico, eliminarDocumentoDinamico } from '../data/documentosDinamicosData';
+import { getDocumentsInSituByEmpresa, publicarDocumentoInSitu, eliminarDocumentoInSitu } from '../data/anexo1Data';
 import { SECCIONES_SST } from '../components/documentos/anexo1/anexo1';
 
 const UploadIcon = ({ className }) => (
@@ -17,127 +19,225 @@ const EmpresaRepositorio = ({ companies = initialCompanies }) => {
   const fileInputRef = useRef(null);
 
   const empresa = companies.find(c => c.id === parseInt(empresaId));
-  const anexosEmpresa = getAnexosByEmpresa(parseInt(empresaId));
   const evidenciasEmpresa = getEvidenciasByEmpresa(parseInt(empresaId));
+  const documentosDinamicos = getDocumentosByEmpresa(parseInt(empresaId));
+  const documentosInSitu = getDocumentsInSituByEmpresa(parseInt(empresaId));
+  const trabajadores = initialEmployees.filter(e => e.companyId === parseInt(empresaId));
 
-  const [filtroEstado, setFiltroEstado] = useState('all');
-  const [filtroCategoria, setFiltroCategoria] = useState('all');
   const [busqueda, setBusqueda] = useState('');
-  const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({
-    nombre: '',
-    itemId: '',
-    categoria: '',
-    observaciones: ''
-  });
-  const [archivoSeleccionado, setArchivoSeleccionado] = useState(null);
+  const [filtroItem, setFiltroItem] = useState('all');
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [acordeonesAbiertos, setAcordeonesAbiertos] = useState({});
 
-  const evidenciasFiltradas = useMemo(() => {
-    let filtradas = evidenciasEmpresa;
+  // Combinar todos los documentos
+  const todosLosDocumentos = useMemo(() => {
+    const docs = [];
+    
+    // Evidencias
+    evidenciasEmpresa.forEach(ev => {
+      docs.push({
+        ...ev,
+        tipoDocumento: 'evidencia',
+        origen: ev.tipoEvidencia === 'general' ? 'general' : 'trabajador',
+        trabajadorId: ev.trabajador || null,
+      });
+    });
 
-    if (filtroEstado !== 'all') {
-      filtradas = filtradas.filter(e => e.estado === filtroEstado);
+    // Documentos dinámicos
+    documentosDinamicos.forEach(doc => {
+      docs.push({
+        ...doc,
+        tipoDocumento: 'dinamico',
+        origen: doc.empleadoId ? 'trabajador' : 'general',
+        trabajadorId: doc.empleadoId || null,
+        itemId: doc.vinculadoAItem || doc.itemId || null,
+        nombre: doc.titulo || doc.nombre,
+        estado: doc.estado || 'Borrador',
+        disponibleParaUsuario: doc.disponibleParaUsuario || false,
+      });
+    });
+
+    // Documentos in situ
+    documentosInSitu.forEach(doc => {
+      docs.push({
+        ...doc,
+        tipoDocumento: 'insitu',
+        origen: 'general',
+        trabajadorId: null,
+        itemId: doc.itemId || null,
+        estado: doc.estado || 'Borrador',
+        disponibleParaUsuario: doc.disponibleParaUsuario || false,
+      });
+    });
+
+    return docs;
+  }, [evidenciasEmpresa, documentosDinamicos, documentosInSitu, refreshKey]);
+
+  // Agrupar documentos por ítem
+  const documentosPorItem = useMemo(() => {
+    const agrupados = {};
+    
+    todosLosDocumentos.forEach(doc => {
+      const itemId = doc.itemId || 'sin-item';
+      if (!agrupados[itemId]) {
+        agrupados[itemId] = [];
+      }
+      agrupados[itemId].push(doc);
+    });
+
+    return agrupados;
+  }, [todosLosDocumentos]);
+
+  // Obtener información del ítem
+  const getItemInfo = (itemId) => {
+    if (itemId === 'sin-item') return { numero: 'N/A', texto: 'Sin ítem asociado', seccion: 'General' };
+    
+    for (const seccion of SECCIONES_SST) {
+      if (seccion.tipo === 'checklist' && seccion.items) {
+        const item = seccion.items.find(i => i.id === itemId);
+        if (item) {
+          return { ...item, seccion: seccion.titulo };
+        }
+      }
     }
+    return { numero: 'N/A', texto: 'Ítem no encontrado', seccion: 'General' };
+  };
 
-    if (filtroCategoria !== 'all') {
-      filtradas = filtradas.filter(e => e.itemId && e.itemId.startsWith(filtroCategoria));
+  // Obtener nombre del trabajador
+  const getNombreTrabajador = (trabajadorId) => {
+    if (!trabajadorId) return null;
+    const trabajador = trabajadores.find(t => t.id === trabajadorId);
+    return trabajador ? `${trabajador.names} ${trabajador.lastNames}` : null;
+  };
+
+  // Filtrar documentos
+  const documentosFiltrados = useMemo(() => {
+    let filtrados = Object.entries(documentosPorItem);
+
+    if (filtroItem !== 'all') {
+      filtrados = filtrados.filter(([itemId]) => itemId === filtroItem);
     }
 
     if (busqueda.trim()) {
       const busquedaLower = busqueda.toLowerCase();
-      filtradas = filtradas.filter(e =>
-        e.nombre.toLowerCase().includes(busquedaLower) ||
-        e.observaciones?.toLowerCase().includes(busquedaLower)
-      );
+      filtrados = filtrados.map(([itemId, docs]) => [
+        itemId,
+        docs.filter(doc => 
+          doc.nombre?.toLowerCase().includes(busquedaLower) ||
+          doc.titulo?.toLowerCase().includes(busquedaLower) ||
+          getItemInfo(itemId).texto.toLowerCase().includes(busquedaLower)
+        )
+      ]).filter(([, docs]) => docs.length > 0);
     }
 
-    return filtradas.sort((a, b) => new Date(b.fechaSubida) - new Date(a.fechaSubida));
-  }, [evidenciasEmpresa, filtroEstado, filtroCategoria, busqueda]);
+    return filtrados;
+  }, [documentosPorItem, filtroItem, busqueda]);
 
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    setArchivoSeleccionado(file);
-  };
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!archivoSeleccionado) {
-      alert('Debe seleccionar un archivo');
-      return;
-    }
-
-    const archivoUrl = URL.createObjectURL(archivoSeleccionado);
-    const nuevaEvidencia = {
-      id: Date.now(),
-      empresaId: parseInt(empresaId),
-      anexo1Id: formData.itemId ? anexosEmpresa[0]?.id : null,
-      itemId: formData.itemId || null,
-      nombre: formData.nombre || archivoSeleccionado.name,
-      archivo: archivoUrl,
-      tipo: archivoSeleccionado.type.startsWith('image/') ? 'imagen' : 'documento',
-      estado: 'Pendiente',
-      subidoPor: 'empresa',
-      aprobadoPor: null,
-      fechaSubida: new Date().toISOString().split('T')[0],
-      fechaAprobacion: null,
-      observaciones: formData.observaciones,
-      tamaño: archivoSeleccionado.size
-    };
-
-    evidencias.push(nuevaEvidencia);
-    alert('Documento subido exitosamente');
+  // Abrir automáticamente acordeones cuando hay documentos nuevos
+  useEffect(() => {
+    if (!documentosFiltrados || !Array.isArray(documentosFiltrados)) return;
     
-    setFormData({ nombre: '', itemId: '', categoria: '', observaciones: '' });
-    setArchivoSeleccionado(null);
-    setShowForm(false);
-    if (fileInputRef.current) fileInputRef.current.value = '';
-  };
+    const itemIds = documentosFiltrados.map(([itemId]) => itemId).filter(Boolean);
+    if (itemIds.length === 0) return;
+    
+    setAcordeonesAbiertos(prev => {
+      const nuevosAcordeones = {};
+      let hayCambios = false;
+      
+      itemIds.forEach(itemId => {
+        if (!(itemId in prev)) {
+          nuevosAcordeones[itemId] = true; // Abrir por defecto
+          hayCambios = true;
+        }
+      });
+      
+      return hayCambios ? { ...prev, ...nuevosAcordeones } : prev;
+    });
+  }, [documentosFiltrados.length]);
 
-  const handleAprobar = (evidenciaId) => {
-    if (window.confirm('¿Aprobar este documento?')) {
-      aprobarEvidencia(evidenciaId, 'admin');
-      alert('Documento aprobado');
-    }
-  };
-
-  const handleRechazar = (evidenciaId) => {
-    const observaciones = prompt('Ingrese motivo de rechazo:');
-    if (observaciones) {
-      rechazarEvidencia(evidenciaId, 'admin', observaciones);
-      alert('Documento rechazado');
-    }
-  };
-
-  const getEstadoColor = (estado) => {
-    switch (estado) {
-      case 'Aprobado':
-        return 'bg-green-100 text-green-800';
-      case 'Pendiente':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'Rechazado':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  // Obtener todos los ítems del Anexo 1 para el selector
-  const todosLosItems = useMemo(() => {
-    const items = [];
+  // Obtener todos los ítems para el filtro
+  const itemsDisponibles = useMemo(() => {
+    const items = [{ id: 'sin-item', texto: 'Sin ítem asociado' }];
     SECCIONES_SST.forEach(seccion => {
       if (seccion.tipo === 'checklist' && seccion.items) {
         seccion.items.forEach(item => {
-          items.push({
-            id: item.id,
-            texto: `#${item.numero} - ${item.texto.substring(0, 50)}...`,
-            seccion: seccion.titulo
-          });
+          if (documentosPorItem[item.id] && documentosPorItem[item.id].length > 0) {
+            items.push({
+              id: item.id,
+              texto: `#${item.numero} - ${item.texto.substring(0, 50)}...`
+            });
+          }
         });
       }
     });
     return items;
-  }, []);
+  }, [documentosPorItem]);
+
+  const handlePublicar = (docId, tipoDocumento) => {
+    if (window.confirm('¿Publicar este documento? Estará disponible para los usuarios.')) {
+      if (tipoDocumento === 'evidencia') {
+        publicarEvidencia(docId);
+      } else if (tipoDocumento === 'dinamico') {
+        publicarDocumentoDinamico(docId);
+      } else if (tipoDocumento === 'insitu') {
+        publicarDocumentoInSitu(docId);
+      }
+      setRefreshKey(prev => prev + 1);
+      alert('Documento publicado exitosamente');
+    }
+  };
+
+  const handleEliminar = (docId, itemId, tipoDocumento) => {
+    if (window.confirm('¿Está seguro de eliminar este documento? Esta acción no se puede deshacer.')) {
+      let eliminado = false;
+      if (tipoDocumento === 'evidencia') {
+        eliminado = eliminarEvidencia(docId);
+      } else if (tipoDocumento === 'dinamico') {
+        eliminado = eliminarDocumentoDinamico(docId);
+      } else if (tipoDocumento === 'insitu') {
+        eliminado = eliminarDocumentoInSitu(docId);
+      }
+      
+      if (eliminado) {
+        // Si el documento estaba asociado a un ítem, también se elimina de ahí
+        setRefreshKey(prev => prev + 1);
+        alert('Documento eliminado exitosamente');
+      } else {
+        alert('Error al eliminar el documento');
+      }
+    }
+  };
+
+  const toggleAcordeon = (itemId) => {
+    setAcordeonesAbiertos(prev => ({
+      ...prev,
+      [itemId]: !prev[itemId]
+    }));
+  };
+
+  const handlePublicarTodo = (documentos, itemId) => {
+    const documentosBorrador = documentos.filter(doc => doc.estado !== 'Publicado');
+    if (documentosBorrador.length === 0) {
+      alert('Todos los documentos de este ítem ya están publicados');
+      return;
+    }
+    
+    if (window.confirm(`¿Publicar todos los documentos de este ítem? (${documentosBorrador.length} documento${documentosBorrador.length > 1 ? 's' : ''})`)) {
+      documentosBorrador.forEach(doc => {
+        if (doc.tipoDocumento === 'evidencia') {
+          publicarEvidencia(doc.id);
+        } else if (doc.tipoDocumento === 'dinamico') {
+          publicarDocumentoDinamico(doc.id);
+        } else if (doc.tipoDocumento === 'insitu') {
+          publicarDocumentoInSitu(doc.id);
+        }
+      });
+      setRefreshKey(prev => prev + 1);
+      alert(`${documentosBorrador.length} documento${documentosBorrador.length > 1 ? 's' : ''} publicado${documentosBorrador.length > 1 ? 's' : ''} exitosamente`);
+    }
+  };
+
+  const totalDocumentos = todosLosDocumentos.length;
 
   if (!empresa) {
     return (
@@ -156,143 +256,32 @@ const EmpresaRepositorio = ({ companies = initialCompanies }) => {
         <div className="flex items-center justify-between">
           <div>
             <button
-              onClick={() => navigate(`/empresas/${empresaId}`)}
+              onClick={() => navigate(`/anexo1/empresa/${empresaId}/estado`)}
               className="flex items-center gap-2 text-gray-600 hover:text-gray-800 mb-4 transition-colors"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
-              Volver a {empresa.name}
+              Volver a Estado General
             </button>
-            <h1 className="text-3xl font-bold text-gray-800 flex items-center gap-3">
-              <UploadIcon className="w-8 h-8 text-primary" />
-              Repositorio de Evidencias
-            </h1>
+            <div className="flex items-center gap-4">
+              <h1 className="text-3xl font-bold text-gray-800 flex items-center gap-3">
+                <UploadIcon className="w-8 h-8 text-primary" />
+                Repositorio de Documentos
+              </h1>
+              <div className="px-4 py-2 bg-gradient-to-r from-primary/10 to-primary/5 rounded-lg border border-primary/20">
+                <span className="text-sm text-gray-600 font-medium">Total Documentos:</span>
+                <span className="ml-2 text-xl font-bold text-primary">{totalDocumentos}</span>
+              </div>
+            </div>
             <p className="text-gray-600 mt-1">{empresa.name}</p>
           </div>
-          <button
-            onClick={() => setShowForm(!showForm)}
-            className="flex items-center gap-2 px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors"
-          >
-            <UploadIcon className="w-5 h-5" />
-            {showForm ? 'Cancelar' : 'Subir Documento'}
-          </button>
         </div>
       </div>
 
-      {/* Formulario de subida */}
-      {showForm && (
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h2 className="text-xl font-bold text-gray-800 mb-4">Subir Documento al Repositorio</h2>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Nombre del Documento *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={formData.nombre}
-                  onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                  placeholder="Ej: Reglamento de Higiene y Seguridad"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Asociar a Ítem del Anexo 1 (Opcional)
-                </label>
-                <select
-                  value={formData.itemId}
-                  onChange={(e) => setFormData({ ...formData, itemId: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                >
-                  <option value="">Ningún ítem</option>
-                  {todosLosItems.map(item => (
-                    <option key={item.id} value={item.id}>{item.texto}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Categoría
-                </label>
-                <select
-                  value={formData.categoria}
-                  onChange={(e) => setFormData({ ...formData, categoria: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                >
-                  <option value="">Sin categoría</option>
-                  <option value="documento-legal">Documento Legal</option>
-                  <option value="certificado">Certificado</option>
-                  <option value="informe">Informe</option>
-                  <option value="registro">Registro</option>
-                  <option value="otro">Otro</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Archivo (PDF o Imagen) *
-                </label>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  required
-                  accept=".pdf,.jpg,.jpeg,.png"
-                  onChange={handleFileChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                />
-                {archivoSeleccionado && (
-                  <p className="text-sm text-gray-600 mt-1">
-                    {archivoSeleccionado.name} ({(archivoSeleccionado.size / 1024).toFixed(2)} KB)
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Observaciones
-              </label>
-              <textarea
-                value={formData.observaciones}
-                onChange={(e) => setFormData({ ...formData, observaciones: e.target.value })}
-                rows={3}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-                placeholder="Observaciones sobre el documento..."
-              />
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                type="submit"
-                className="px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors"
-              >
-                Subir Documento
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowForm(false);
-                  setFormData({ nombre: '', itemId: '', categoria: '', observaciones: '' });
-                  setArchivoSeleccionado(null);
-                }}
-                className="px-6 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
-              >
-                Cancelar
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
       {/* Filtros */}
       <div className="bg-white rounded-lg shadow-md p-4">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="relative">
             <input
               type="text"
@@ -303,184 +292,187 @@ const EmpresaRepositorio = ({ companies = initialCompanies }) => {
             />
           </div>
           <select
-            value={filtroEstado}
-            onChange={(e) => setFiltroEstado(e.target.value)}
+            value={filtroItem}
+            onChange={(e) => setFiltroItem(e.target.value)}
             className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
           >
-            <option value="all">Todos los estados</option>
-            <option value="Pendiente">Pendiente</option>
-            <option value="Aprobado">Aprobado</option>
-            <option value="Rechazado">Rechazado</option>
-          </select>
-          <select
-            value={filtroCategoria}
-            onChange={(e) => setFiltroCategoria(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-          >
-            <option value="all">Todas las categorías</option>
-            {SECCIONES_SST.filter(s => s.tipo === 'checklist').map(seccion => (
-              <option key={seccion.id} value={seccion.id}>{seccion.titulo}</option>
+            <option value="all">Todos los ítems</option>
+            {itemsDisponibles && Array.isArray(itemsDisponibles) && itemsDisponibles.map(item => (
+              <option key={item.id} value={item.id}>{item.texto}</option>
             ))}
           </select>
-          <button
-            onClick={() => {
-              setFiltroEstado('all');
-              setFiltroCategoria('all');
-              setBusqueda('');
-            }}
-            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors"
-          >
-            Limpiar Filtros
-          </button>
         </div>
       </div>
 
-      {/* Estadísticas */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white rounded-lg shadow-md p-4 border-l-4 border-blue-500">
-          <p className="text-sm text-gray-600 mb-1">Total Documentos</p>
-          <p className="text-2xl font-bold text-blue-600">{evidenciasEmpresa.length}</p>
-        </div>
-        <div className="bg-white rounded-lg shadow-md p-4 border-l-4 border-yellow-500">
-          <p className="text-sm text-gray-600 mb-1">Pendientes</p>
-          <p className="text-2xl font-bold text-yellow-600">
-            {evidenciasEmpresa.filter(e => e.estado === 'Pendiente').length}
-          </p>
-        </div>
-        <div className="bg-white rounded-lg shadow-md p-4 border-l-4 border-green-500">
-          <p className="text-sm text-gray-600 mb-1">Aprobados</p>
-          <p className="text-2xl font-bold text-green-600">
-            {evidenciasEmpresa.filter(e => e.estado === 'Aprobado').length}
-          </p>
-        </div>
-        <div className="bg-white rounded-lg shadow-md p-4 border-l-4 border-red-500">
-          <p className="text-sm text-gray-600 mb-1">Rechazados</p>
-          <p className="text-2xl font-bold text-red-600">
-            {evidenciasEmpresa.filter(e => e.estado === 'Rechazado').length}
-          </p>
-        </div>
-      </div>
-
-      {/* Lista de documentos */}
-      <div className="bg-white rounded-lg shadow-md overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-surface to-secondary-light/70">
-          <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-            <UploadIcon className="w-6 h-6 text-primary" />
-            Documentos ({evidenciasFiltradas.length})
-          </h2>
-        </div>
-        <div className="p-6">
-          {evidenciasFiltradas.length > 0 ? (
-            <div className="space-y-4">
-              {evidenciasFiltradas.map((evidencia) => {
-                // Buscar el ítem asociado
-                let itemAsociado = null;
-                if (evidencia.itemId) {
-                  SECCIONES_SST.forEach(seccion => {
-                    if (seccion.tipo === 'checklist' && seccion.items) {
-                      const item = seccion.items.find(i => i.id === evidencia.itemId);
-                      if (item) {
-                        itemAsociado = { ...item, seccion: seccion.titulo };
-                      }
-                    }
-                  });
-                }
-
-                return (
-                  <div
-                    key={evidencia.id}
-                    className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      {/* Lista de documentos agrupados por ítem */}
+      <div className="space-y-4">
+        {documentosFiltrados && Array.isArray(documentosFiltrados) && documentosFiltrados.length > 0 ? (
+          documentosFiltrados.map(([itemId, documentos]) => {
+            if (!itemId || !documentos || !Array.isArray(documentos)) return null;
+            
+            const itemInfo = getItemInfo(itemId);
+            const estaAbierto = acordeonesAbiertos[itemId] || false;
+            const documentosBorrador = documentos.filter(doc => doc && doc.estado !== 'Publicado');
+            
+            return (
+              <div key={itemId} className="bg-white rounded-lg shadow-md overflow-hidden">
+                <button
+                  onClick={() => toggleAcordeon(itemId)}
+                  className="w-full px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-primary/10 to-primary/5 hover:from-primary/15 hover:to-primary/10 transition-colors"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3 flex-1 text-left">
+                      <svg 
+                        className={`w-5 h-5 text-primary transition-transform ${estaAbierto ? 'rotate-90' : ''}`}
+                        fill="none" 
+                        stroke="currentColor" 
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                      <div>
+                        <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                          <svg className="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                           </svg>
-                          <h3 className="font-semibold text-gray-800">{evidencia.nombre}</h3>
-                          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getEstadoColor(evidencia.estado)}`}>
-                            {evidencia.estado}
+                          Ítem #{itemInfo.numero} - {itemInfo.seccion}
+                          <span className="ml-2 text-sm font-normal text-gray-600">
+                            ({documentos.length} {documentos.length === 1 ? 'documento' : 'documentos'})
                           </span>
-                        </div>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-gray-600">
-                          <div>
-                            <span className="font-medium">Tipo:</span> {evidencia.tipo}
-                          </div>
-                          <div>
-                            <span className="font-medium">Subido:</span> {new Date(evidencia.fechaSubida).toLocaleDateString('es-ES')}
-                          </div>
-                          <div>
-                            <span className="font-medium">Tamaño:</span> {(evidencia.tamaño / 1024).toFixed(2)} KB
-                          </div>
-                          {itemAsociado && (
-                            <div>
-                              <span className="font-medium">Ítem:</span> #{itemAsociado.numero} - {itemAsociado.seccion}
-                            </div>
-                          )}
-                        </div>
-                        {evidencia.observaciones && (
-                          <div className="mt-2 p-2 bg-gray-50 rounded text-sm text-gray-600">
-                            <span className="font-medium">Observaciones:</span> {evidencia.observaciones}
-                          </div>
-                        )}
-                        {evidencia.estado === 'Rechazado' && evidencia.observaciones && (
-                          <div className="mt-2 p-2 bg-red-50 rounded text-sm text-red-600">
-                            <span className="font-medium">Motivo de rechazo:</span> {evidencia.observaciones}
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex flex-col gap-2 ml-4">
-                        <button
-                          onClick={() => window.open(evidencia.archivo, '_blank')}
-                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
-                        >
-                          Ver
-                        </button>
-                        {evidencia.estado === 'Pendiente' && (
-                          <>
-                            <button
-                              onClick={() => handleAprobar(evidencia.id)}
-                              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
-                            >
-                              Aprobar
-                            </button>
-                            <button
-                              onClick={() => handleRechazar(evidencia.id)}
-                              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
-                            >
-                              Rechazar
-                            </button>
-                          </>
-                        )}
+                        </h2>
+                        <p className="text-sm text-gray-600 mt-1">{itemInfo.texto}</p>
                       </div>
                     </div>
+                    {documentosBorrador.length > 0 && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handlePublicarTodo(documentos, itemId);
+                        }}
+                        className="ml-4 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium flex items-center gap-2"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        Publicar Todo ({documentosBorrador.length})
+                      </button>
+                    )}
                   </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="text-center py-12">
-              <UploadIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-600 text-lg font-medium mb-2">
-                No hay documentos
-              </p>
-              <p className="text-gray-500 text-sm mb-4">
-                Sube documentos para comenzar
-              </p>
-              <button
-                onClick={() => setShowForm(true)}
-                className="inline-flex items-center gap-2 bg-primary text-white px-6 py-3 rounded-lg hover:bg-primary-dark transition-colors"
-              >
-                <UploadIcon className="w-5 h-5" />
-                Subir Primer Documento
-              </button>
-            </div>
-          )}
-        </div>
+                </button>
+                {estaAbierto && (
+                  <div className="p-6">
+                  <div className="space-y-4">
+                    {documentos.map((doc) => {
+                      const nombreTrabajador = getNombreTrabajador(doc.trabajadorId);
+                      const esGeneral = doc.origen === 'general';
+                      
+                      return (
+                        <div
+                          key={doc.id}
+                          className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-3 mb-2 flex-wrap">
+                                <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                                <h3 className="font-semibold text-gray-800">{doc.nombre || doc.titulo}</h3>
+                                <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                                  doc.estado === 'Publicado' 
+                                    ? 'bg-green-100 text-green-800' 
+                                    : 'bg-yellow-100 text-yellow-800'
+                                }`}>
+                                  {doc.estado || 'Borrador'}
+                                </span>
+                                {doc.disponibleParaUsuario && (
+                                  <span className="px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
+                                    Disponible para usuarios
+                                  </span>
+                                )}
+                              </div>
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600 mt-2">
+                                <div>
+                                  <span className="font-medium">Tipo:</span>{' '}
+                                  {esGeneral ? (
+                                    <span className="text-gray-800">Documento General</span>
+                                  ) : (
+                                    <span className="text-gray-800">
+                                      Documento de Empleado: <span className="font-semibold">{nombreTrabajador || 'N/A'}</span>
+                                    </span>
+                                  )}
+                                </div>
+                                <div>
+                                  <span className="font-medium">Fecha:</span>{' '}
+                                  {new Date(doc.fechaSubida || doc.fechaCreacion || doc.fecha).toLocaleDateString('es-ES')}
+                                </div>
+                                {doc.tamaño && (
+                                  <div>
+                                    <span className="font-medium">Tamaño:</span> {(doc.tamaño / 1024).toFixed(2)} KB
+                                  </div>
+                                )}
+                              </div>
+                              {doc.observaciones && (
+                                <div className="mt-2 p-2 bg-gray-50 rounded text-sm text-gray-600">
+                                  <span className="font-medium">Observaciones:</span> {doc.observaciones}
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex flex-col gap-2 ml-4">
+                              {(doc.archivo || doc.url) && (
+                                <button
+                                  onClick={() => {
+                                    const url = doc.archivo || doc.url;
+                                    if (url) {
+                                      window.open(url, '_blank');
+                                    } else {
+                                      alert('No hay archivo disponible para este documento');
+                                    }
+                                  }}
+                                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                                >
+                                  Ver
+                                </button>
+                              )}
+                              {doc.estado !== 'Publicado' && (
+                                <button
+                                  onClick={() => handlePublicar(doc.id, doc.tipoDocumento)}
+                                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
+                                >
+                                  Publicar
+                                </button>
+                              )}
+                              <button
+                                onClick={() => handleEliminar(doc.id, doc.itemId, doc.tipoDocumento)}
+                                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
+                              >
+                                Eliminar
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  </div>
+                )}
+              </div>
+            );
+          })
+        ) : (
+          <div className="bg-white rounded-lg shadow-md p-12 text-center">
+            <UploadIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+            <p className="text-gray-600 text-lg font-medium mb-2">
+              No hay documentos
+            </p>
+            <p className="text-gray-500 text-sm">
+              Los documentos aparecerán aquí cuando se suban evidencias desde el Anexo 1
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
 };
 
 export default EmpresaRepositorio;
-

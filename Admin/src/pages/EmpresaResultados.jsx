@@ -1,7 +1,9 @@
 import { useState, useMemo } from 'react';
+import { useParams } from 'react-router-dom';
 import { respuestasEvaluaciones as initialRespuestas } from '../data/evaluacionesData';
 import { evaluaciones } from '../data/evaluacionesData';
-import { capacitaciones } from '../data/capacitacionesData';
+import { initialCompanies } from '../data/companiesData';
+import { initialEmployees } from '../data/employeesData';
 
 const SearchIcon = ({ className }) => (
   <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -15,7 +17,11 @@ const DownloadIcon = ({ className }) => (
   </svg>
 );
 
-const ControlResultados = ({ employees = [], companies = [] }) => {
+const EmpresaResultados = ({ employees = initialEmployees, companies = initialCompanies }) => {
+  const { empresaId } = useParams();
+  const empresaIdNum = parseInt(empresaId);
+  const empresa = companies.find(c => c.id === empresaIdNum);
+
   const [respuestas, setRespuestas] = useState(() => {
     try {
       return initialRespuestas || [];
@@ -27,29 +33,34 @@ const ControlResultados = ({ employees = [], companies = [] }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterEstado, setFilterEstado] = useState('Todas');
   const [filterEvaluacion, setFilterEvaluacion] = useState('Todas');
-  const [filterEmpresa, setFilterEmpresa] = useState('Todas');
   const [selectedResultado, setSelectedResultado] = useState(null);
 
+  // Filtrar solo resultados de esta empresa
   const resultadosFiltrados = useMemo(() => {
     if (!respuestas || !Array.isArray(respuestas)) return [];
     return respuestas.filter(resp => {
       if (!resp) return false;
+      if (resp.empresaId !== empresaIdNum) return false;
+
       const trabajador = employees?.find(e => e && e.id === resp.trabajadorId);
-      const empresa = companies?.find(c => c && c.id === resp.empresaId);
       const evaluacion = evaluaciones?.find(e => e && e.id === resp.evaluacionId);
       
       const matchSearch = 
         (trabajador && `${trabajador.firstName || trabajador.names || ''} ${trabajador.lastName || trabajador.lastNames || ''}`.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (empresa && empresa.name?.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (evaluacion && evaluacion.nombre?.toLowerCase().includes(searchTerm.toLowerCase()));
       
       const matchEstado = filterEstado === 'Todas' || resp.estado === filterEstado;
       const matchEvaluacion = filterEvaluacion === 'Todas' || resp.evaluacionId === parseInt(filterEvaluacion);
-      const matchEmpresa = filterEmpresa === 'Todas' || resp.empresaId === parseInt(filterEmpresa);
       
-      return matchSearch && matchEstado && matchEvaluacion && matchEmpresa;
+      return matchSearch && matchEstado && matchEvaluacion;
     });
-  }, [respuestas, searchTerm, filterEstado, filterEvaluacion, filterEmpresa, employees, companies]);
+  }, [respuestas, searchTerm, filterEstado, filterEvaluacion, empresaIdNum, employees]);
+
+  // Filtrar evaluaciones de esta empresa para el selector
+  const evaluacionesEmpresa = useMemo(() => {
+    if (!evaluaciones || !Array.isArray(evaluaciones)) return [];
+    return evaluaciones.filter(e => e && e.empresaId === empresaIdNum);
+  }, [empresaIdNum]);
 
   const getTrabajadorNombre = (trabajadorId) => {
     const trabajador = employees?.find(e => e.id === trabajadorId);
@@ -57,24 +68,10 @@ const ControlResultados = ({ employees = [], companies = [] }) => {
     return `${trabajador.firstName || trabajador.names || ''} ${trabajador.lastName || trabajador.lastNames || ''}`.trim();
   };
 
-  const getEmpresaNombre = (empresaId) => {
-    const empresa = companies?.find(c => c.id === empresaId);
-    return empresa ? empresa.name : 'Empresa no encontrada';
-  };
-
   const getEvaluacionNombre = (evaluacionId) => {
     if (!evaluaciones || !Array.isArray(evaluaciones)) return 'Evaluación no encontrada';
     const evaluacion = evaluaciones.find(e => e && e.id === evaluacionId);
     return evaluacion ? evaluacion.nombre : 'Evaluación no encontrada';
-  };
-
-  const getCapacitacionNombre = (evaluacionId) => {
-    if (!evaluaciones || !Array.isArray(evaluaciones)) return '';
-    const evaluacion = evaluaciones.find(e => e && e.id === evaluacionId);
-    if (!evaluacion) return '';
-    if (!capacitaciones || !Array.isArray(capacitaciones)) return '';
-    const cap = capacitaciones.find(c => c && c.id === evaluacion.capacitacionId);
-    return cap ? cap.nombre : '';
   };
 
   const calcularCalificacion = (respuesta) => {
@@ -136,9 +133,6 @@ const ControlResultados = ({ employees = [], companies = [] }) => {
             .pregunta { margin: 20px 0; padding: 15px; border-left: 4px solid #004A7C; background: #f8f9fa; border-radius: 4px; }
             .correcta { color: #22c55e; font-weight: bold; }
             .incorrecta { color: #ef4444; font-weight: bold; }
-            table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-            th { background: #004A7C; color: white; }
             @media print {
               body { padding: 10px; }
             }
@@ -147,10 +141,9 @@ const ControlResultados = ({ employees = [], companies = [] }) => {
         <body>
           <h1>Resultado de Evaluación</h1>
           <div class="info">
+            <p><strong>Empresa:</strong> ${empresa?.name || 'N/A'}</p>
             <p><strong>Trabajador:</strong> ${getTrabajadorNombre(resultado.trabajadorId)}</p>
-            <p><strong>Empresa:</strong> ${getEmpresaNombre(resultado.empresaId)}</p>
             <p><strong>Evaluación:</strong> ${getEvaluacionNombre(resultado.evaluacionId)}</p>
-            <p><strong>Capacitación:</strong> ${getCapacitacionNombre(resultado.evaluacionId)}</p>
             <p><strong>Fecha de Respuesta:</strong> ${resultado.fechaRespuesta ? new Date(resultado.fechaRespuesta).toLocaleString('es-ES') : 'Pendiente'}</p>
           </div>
           ${calificacion ? `
@@ -209,7 +202,6 @@ const ControlResultados = ({ employees = [], companies = [] }) => {
       return;
     }
 
-    // Crear una ventana nueva con el contenido HTML
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
       alert('Por favor, permite las ventanas emergentes para descargar el PDF');
@@ -219,7 +211,6 @@ const ControlResultados = ({ employees = [], companies = [] }) => {
     printWindow.document.write(htmlContent);
     printWindow.document.close();
     
-    // Esperar a que se cargue el contenido y luego abrir el diálogo de impresión
     printWindow.onload = () => {
       setTimeout(() => {
         printWindow.print();
@@ -229,14 +220,12 @@ const ControlResultados = ({ employees = [], companies = [] }) => {
 
   const handleExportExcel = () => {
     const csvContent = [
-      ['Trabajador', 'Empresa', 'Evaluación', 'Capacitación', 'Fecha', 'Estado', 'Calificación', 'Porcentaje', 'Correctas', 'Total'],
+      ['Trabajador', 'Evaluación', 'Fecha', 'Estado', 'Calificación', 'Porcentaje', 'Correctas', 'Total'],
       ...resultadosFiltrados.map(resp => {
         const calificacion = calcularCalificacion(resp);
         return [
           getTrabajadorNombre(resp.trabajadorId),
-          getEmpresaNombre(resp.empresaId),
           getEvaluacionNombre(resp.evaluacionId),
-          getCapacitacionNombre(resp.evaluacionId),
           resp.fechaRespuesta ? new Date(resp.fechaRespuesta).toLocaleString('es-ES') : 'Pendiente',
           resp.estado,
           calificacion ? calificacion.calificacion : '-',
@@ -250,7 +239,7 @@ const ControlResultados = ({ employees = [], companies = [] }) => {
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `resultados_evaluaciones_${new Date().toISOString().split('T')[0]}.csv`;
+    link.download = `resultados_evaluaciones_${empresa?.name || 'empresa'}_${new Date().toISOString().split('T')[0]}.csv`;
     link.click();
   };
 
@@ -263,12 +252,22 @@ const ControlResultados = ({ employees = [], companies = [] }) => {
     return { total, respondidas, pendientes, porcentajeRespuestas };
   }, [resultadosFiltrados]);
 
+  if (!empresa) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <p className="text-gray-500">Empresa no encontrada</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-800">Control y Resultados</h1>
-          <p className="text-gray-600 mt-1">Gestiona y visualiza los resultados de las evaluaciones</p>
+          <h1 className="text-3xl font-bold text-gray-800">Resultados de Evaluaciones</h1>
+          <p className="text-gray-600 mt-1">{empresa.name}</p>
         </div>
         {resultadosFiltrados.length > 0 && (
           <button
@@ -303,12 +302,12 @@ const ControlResultados = ({ employees = [], companies = [] }) => {
 
       {/* Filtros y búsqueda */}
       <div className="bg-white rounded-lg shadow-md p-4">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="relative">
             <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input
               type="text"
-              placeholder="Buscar por trabajador, empresa o evaluación..."
+              placeholder="Buscar por trabajador o evaluación..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
@@ -329,21 +328,8 @@ const ControlResultados = ({ employees = [], companies = [] }) => {
             className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
           >
             <option value="Todas">Todas las evaluaciones</option>
-            {evaluaciones && Array.isArray(evaluaciones) && evaluaciones.map(evaluacion => (
+            {evaluacionesEmpresa.map(evaluacion => (
               <option key={evaluacion?.id} value={evaluacion?.id}>{evaluacion?.nombre || 'Sin nombre'}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Empresa</label>
-          <select
-            value={filterEmpresa}
-            onChange={(e) => setFilterEmpresa(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-          >
-            <option value="Todas">Todas las empresas</option>
-            {companies.map(emp => (
-              <option key={emp.id} value={emp.id}>{emp.name}</option>
             ))}
           </select>
         </div>
@@ -356,7 +342,6 @@ const ControlResultados = ({ employees = [], companies = [] }) => {
             <thead className="bg-primary text-white">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium uppercase">Trabajador</th>
-                <th className="px-6 py-3 text-left text-xs font-medium uppercase">Empresa</th>
                 <th className="px-6 py-3 text-left text-xs font-medium uppercase">Evaluación</th>
                 <th className="px-6 py-3 text-left text-xs font-medium uppercase">Fecha</th>
                 <th className="px-6 py-3 text-center text-xs font-medium uppercase">Estado</th>
@@ -371,9 +356,6 @@ const ControlResultados = ({ employees = [], companies = [] }) => {
                   <tr key={resultado.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {getTrabajadorNombre(resultado.trabajadorId)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                      {getEmpresaNombre(resultado.empresaId)}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-700">
                       <div className="max-w-xs truncate" title={getEvaluacionNombre(resultado.evaluacionId)}>
@@ -425,7 +407,7 @@ const ControlResultados = ({ employees = [], companies = [] }) => {
 
       {resultadosFiltrados.length === 0 && (
         <div className="bg-white rounded-lg shadow-md p-12 text-center">
-          <p className="text-gray-500 text-lg">No se encontraron resultados</p>
+          <p className="text-gray-500 text-lg">No se encontraron resultados para esta empresa</p>
         </div>
       )}
 
@@ -473,5 +455,6 @@ const ControlResultados = ({ employees = [], companies = [] }) => {
   );
 };
 
-export default ControlResultados;
+export default EmpresaResultados;
+
 

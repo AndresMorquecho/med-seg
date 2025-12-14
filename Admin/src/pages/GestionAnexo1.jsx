@@ -96,90 +96,86 @@ const GestionAnexo1 = ({ companies = initialCompanies }) => {
         </div>
       </div>
 
-      {/* Lista de empresas en tarjetas */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {empresasFiltradas.map((empresa) => (
-          <div
-            key={empresa.id}
-            className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-6 border border-gray-200"
-          >
-            {/* Header de la tarjeta */}
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex items-start gap-3 flex-1">
-                <div className="flex-shrink-0">
-                  {empresa.logo ? (
-                    <img
-                      src={empresa.logo}
-                      alt="Logo"
-                      className="w-12 h-12 object-contain rounded border border-gray-200"
-                    />
-                  ) : (
-                    <div className="w-12 h-12 bg-primary rounded flex items-center justify-center">
-                      <BuildingIcon className="w-6 h-6 text-white" />
+      {/* Tabla de empresas */}
+      <div className="bg-white rounded-lg shadow-md overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gradient-to-r from-primary to-primary-dark text-white">
+              <tr>
+                <th className="px-6 py-4 text-left text-sm font-semibold">Empresa</th>
+                <th className="px-6 py-4 text-left text-sm font-semibold">RUC</th>
+                <th className="px-6 py-4 text-left text-sm font-semibold">Actividad</th>
+                <th className="px-6 py-4 text-center text-sm font-semibold">Cumplimiento</th>
+                <th className="px-6 py-4 text-center text-sm font-semibold">Última Inspección</th>
+                <th className="px-6 py-4 text-center text-sm font-semibold">Total Inspecciones</th>
+                <th className="px-6 py-4 text-center text-sm font-semibold">Tareas Pendientes</th>
+                <th className="px-6 py-4 text-center text-sm font-semibold">Acciones</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {empresasFiltradas.map((empresa) => (
+                <tr key={empresa.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="flex-shrink-0">
+                        {empresa.logo ? (
+                          <img
+                            src={empresa.logo}
+                            alt="Logo"
+                            className="w-10 h-10 object-contain rounded border border-gray-200"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 bg-primary rounded flex items-center justify-center">
+                            <BuildingIcon className="w-5 h-5 text-white" />
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <p className="font-semibold text-gray-900">{empresa.name}</p>
+                      </div>
                     </div>
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-bold text-gray-900 truncate text-lg">{empresa.name}</h3>
-                  <p className="text-sm text-gray-600 mt-1">RUC: {empresa.ruc}</p>
-                  {empresa.tipoActividad && (
-                    <p className="text-xs text-gray-500 mt-1">
-                      {empresa.tipoActividad}
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Indicadores */}
-            <div className="space-y-3 mb-4">
-              {/* Cumplimiento */}
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">Cumplimiento</span>
-                <span className={`px-3 py-1 rounded-full text-sm font-bold ${getCumplimientoColor(empresa.porcentajeCumplimiento)}`}>
-                  {empresa.porcentajeCumplimiento}%
-                </span>
-              </div>
-
-              {/* Última inspección */}
-              {empresa.ultimaInspeccion && (
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Última Inspección</span>
-                  <span className="text-sm font-medium text-gray-800">
-                    {new Date(empresa.ultimaInspeccion).toLocaleDateString('es-ES')}
-                  </span>
-                </div>
-              )}
-
-              {/* Total inspecciones */}
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">Total Inspecciones</span>
-                <span className="text-sm font-medium text-gray-800">
-                  {empresa.totalInspecciones}
-                </span>
-              </div>
-
-              {/* Tareas pendientes */}
-              {empresa.tareasPendientes > 0 && (
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Tareas Pendientes</span>
-                  <span className="px-2 py-1 bg-red-100 text-red-600 rounded text-xs font-semibold">
-                    {empresa.tareasPendientes}
-                  </span>
-                </div>
-              )}
-            </div>
-
-            {/* Botón de acción */}
-            <button
-              onClick={() => navigate(`/empresas/${empresa.id}/anexo1/estado`)}
-              className="w-full bg-primary text-white px-4 py-2 rounded-lg hover:bg-primary-dark transition-colors font-semibold flex items-center justify-center gap-2"
-            >
-              <ChartIcon className="w-5 h-5" />
-              Gestionar Anexo 1
-            </button>
-          </div>
-        ))}
+                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-700">{empresa.ruc}</td>
+                  <td className="px-6 py-4 text-sm text-gray-600">
+                    {empresa.tipoActividad || '-'}
+                  </td>
+                  <td className="px-6 py-4 text-center">
+                    <span className={`px-3 py-1 rounded-full text-sm font-bold ${getCumplimientoColor(empresa.porcentajeCumplimiento)}`}>
+                      {empresa.porcentajeCumplimiento}%
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-center text-sm text-gray-700">
+                    {empresa.ultimaInspeccion 
+                      ? new Date(empresa.ultimaInspeccion).toLocaleDateString('es-ES')
+                      : '-'
+                    }
+                  </td>
+                  <td className="px-6 py-4 text-center text-sm text-gray-700">
+                    {empresa.totalInspecciones}
+                  </td>
+                  <td className="px-6 py-4 text-center">
+                    {empresa.tareasPendientes > 0 ? (
+                      <span className="px-2 py-1 bg-red-100 text-red-600 rounded text-xs font-semibold">
+                        {empresa.tareasPendientes}
+                      </span>
+                    ) : (
+                      <span className="text-sm text-gray-500">0</span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 text-center">
+                    <button
+                      onClick={() => navigate(`/anexo1/empresa/${empresa.id}/estado`)}
+                      className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors font-semibold text-sm flex items-center justify-center gap-2 whitespace-nowrap"
+                    >
+                      <ChartIcon className="w-4 h-4" />
+                      Gestionar
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Mensaje cuando no hay empresas */}

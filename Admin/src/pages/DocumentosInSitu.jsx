@@ -193,7 +193,7 @@ const DocumentosInSitu = ({ companies = initialCompanies }) => {
         <div className="flex items-center justify-between">
           <div>
             <button
-              onClick={() => navigate('/anexo1/gestion')}
+              onClick={() => navigate('/anexo1')}
               className="flex items-center gap-2 text-gray-600 hover:text-gray-800 mb-4 transition-colors"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

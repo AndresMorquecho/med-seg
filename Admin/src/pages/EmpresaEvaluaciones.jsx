@@ -1,11 +1,10 @@
 import { useState, useMemo, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import EvaluacionForm from '../components/EvaluacionForm';
 import { evaluaciones as initialEvaluaciones } from '../data/evaluacionesData';
 import { capacitaciones } from '../data/capacitacionesData';
 import { initialCompanies } from '../data/companiesData';
 import { initialEmployees } from '../data/employeesData';
-import { respuestasEvaluaciones } from '../data/evaluacionesData';
 
 const SearchIcon = ({ className }) => (
   <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -31,21 +30,19 @@ const TrashIcon = ({ className }) => (
   </svg>
 );
 
-const CopyIcon = ({ className }) => (
-  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-  </svg>
-);
-
 const SendIcon = ({ className }) => (
   <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
   </svg>
 );
 
-const Evaluaciones = ({ companies = initialCompanies, employees = initialEmployees }) => {
+const EmpresaEvaluaciones = ({ companies = initialCompanies, employees = initialEmployees }) => {
+  const { empresaId } = useParams();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const empresaIdNum = parseInt(empresaId);
+  const empresa = companies.find(c => c.id === empresaIdNum);
+
   const [evaluaciones, setEvaluaciones] = useState(() => {
     try {
       return initialEvaluaciones || [];
@@ -58,39 +55,45 @@ const Evaluaciones = ({ companies = initialCompanies, employees = initialEmploye
   const [editingEvaluacion, setEditingEvaluacion] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterEstado, setFilterEstado] = useState('Todas');
-  const [filterEmpresa, setFilterEmpresa] = useState('Todas');
 
   // Verificar si hay parámetro de edición en la URL
   useEffect(() => {
     const editarId = searchParams.get('editar');
     if (editarId) {
       const evaluacion = evaluaciones.find(e => e.id === parseInt(editarId));
-      if (evaluacion) {
+      if (evaluacion && evaluacion.empresaId === empresaIdNum) {
         setEditingEvaluacion(evaluacion);
         setShowForm(true);
-        setSearchParams({}); // Limpiar parámetros
+        setSearchParams({});
       }
     }
-  }, [searchParams, evaluaciones, setSearchParams]);
+  }, [searchParams, evaluaciones, setSearchParams, empresaIdNum]);
 
+  // Filtrar solo evaluaciones de esta empresa
   const evaluacionesFiltradas = useMemo(() => {
     if (!evaluaciones || !Array.isArray(evaluaciones)) return [];
     return evaluaciones.filter(evaluacion => {
       if (!evaluacion) return false;
+      const perteneceEmpresa = evaluacion.empresaId === empresaIdNum;
+      if (!perteneceEmpresa) return false;
+
       const matchSearch = evaluacion.nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          evaluacion.descripcion?.toLowerCase().includes(searchTerm.toLowerCase());
       const matchEstado = filterEstado === 'Todas' || evaluacion.estado === filterEstado;
-      const matchEmpresa = filterEmpresa === 'Todas' || 
-                          (evaluacion.empresaId && evaluacion.empresaId === parseInt(filterEmpresa));
-      return matchSearch && matchEstado && matchEmpresa;
+      
+      return matchSearch && matchEstado;
     });
-  }, [evaluaciones, searchTerm, filterEstado, filterEmpresa]);
+  }, [evaluaciones, searchTerm, filterEstado, empresaIdNum]);
 
   const handleAddEvaluacion = (newEvaluacion) => {
-    const nuevasEvaluaciones = [...evaluaciones, newEvaluacion];
+    // Asegurar que la evaluación pertenece a esta empresa
+    const evaluacionConEmpresa = {
+      ...newEvaluacion,
+      empresaId: empresaIdNum
+    };
+    const nuevasEvaluaciones = [...evaluaciones, evaluacionConEmpresa];
     setEvaluaciones(nuevasEvaluaciones);
-    // Actualizar el array exportado para persistencia
-    initialEvaluaciones.push(newEvaluacion);
+    initialEvaluaciones.push(evaluacionConEmpresa);
     setShowForm(false);
   };
 
@@ -99,7 +102,6 @@ const Evaluaciones = ({ companies = initialCompanies, employees = initialEmploye
       evaluacion.id === updatedEvaluacion.id ? updatedEvaluacion : evaluacion
     );
     setEvaluaciones(evaluacionesActualizadas);
-    // Actualizar el array exportado
     const index = initialEvaluaciones.findIndex(e => e.id === updatedEvaluacion.id);
     if (index !== -1) {
       initialEvaluaciones[index] = updatedEvaluacion;
@@ -112,7 +114,6 @@ const Evaluaciones = ({ companies = initialCompanies, employees = initialEmploye
     if (window.confirm('¿Está seguro de eliminar esta evaluación?')) {
       const evaluacionesFiltradas = evaluaciones.filter(evaluacion => evaluacion.id !== id);
       setEvaluaciones(evaluacionesFiltradas);
-      // Actualizar el array exportado
       const index = initialEvaluaciones.findIndex(e => e.id === id);
       if (index !== -1) {
         initialEvaluaciones.splice(index, 1);
@@ -135,11 +136,11 @@ const Evaluaciones = ({ companies = initialCompanies, employees = initialEmploye
   };
 
   const handleEnviarEvaluacion = (evaluacion) => {
-    navigate(`/evaluaciones/enviar/${evaluacion.id}`);
+    navigate(`/anexo1/empresa/${empresaId}/evaluaciones/enviar/${evaluacion.id}`);
   };
 
   const handleVerSeguimiento = (evaluacion) => {
-    navigate(`/evaluaciones/seguimiento/${evaluacion.id}`);
+    navigate(`/anexo1/empresa/${empresaId}/evaluaciones/seguimiento/${evaluacion.id}`);
   };
 
   const getEstadoColor = (estado) => {
@@ -157,18 +158,22 @@ const Evaluaciones = ({ companies = initialCompanies, employees = initialEmploye
     }
   };
 
-  const getCapacitacionNombre = (capacitacionId) => {
-    if (!capacitaciones || !Array.isArray(capacitaciones)) return 'Capacitación no encontrada';
-    const cap = capacitaciones.find(c => c && c.id === capacitacionId);
-    return cap ? cap.nombre : 'Capacitación no encontrada';
-  };
+  if (!empresa) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <p className="text-gray-500">Empresa no encontrada</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-800">Evaluaciones</h1>
-          <p className="text-gray-600 mt-1">Crea y gestiona evaluaciones asociadas a capacitaciones</p>
+          <p className="text-gray-600 mt-1">{empresa.name}</p>
         </div>
         <button
           onClick={() => {
@@ -188,13 +193,14 @@ const Evaluaciones = ({ companies = initialCompanies, employees = initialEmploye
           onUpdateEvaluacion={handleUpdateEvaluacion}
           editingEvaluacion={editingEvaluacion}
           onCancel={handleCancel}
-          capacitaciones={capacitaciones}
+          capacitaciones={capacitaciones.filter(c => c.empresaId === empresaIdNum)}
+          empresaId={empresaIdNum}
         />
       )}
 
       {/* Filtros y búsqueda */}
       <div className="bg-white rounded-lg shadow-md p-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="relative">
             <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input
@@ -217,19 +223,6 @@ const Evaluaciones = ({ companies = initialCompanies, employees = initialEmploye
             <option value="Finalizada">Finalizada</option>
           </select>
         </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Empresa</label>
-          <select
-            value={filterEmpresa}
-            onChange={(e) => setFilterEmpresa(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-          >
-            <option value="Todas">Todas las empresas</option>
-            {companies.map(emp => (
-              <option key={emp.id} value={emp.id}>{emp.name}</option>
-            ))}
-          </select>
-        </div>
       </div>
 
       {/* Lista de evaluaciones */}
@@ -246,12 +239,6 @@ const Evaluaciones = ({ companies = initialCompanies, employees = initialEmploye
             </div>
             
             <div className="space-y-2 mb-4">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-500">Capacitación:</span>
-                <span className="font-medium text-gray-700 text-right">
-                  {getCapacitacionNombre(evaluacion.capacitacionId)}
-                </span>
-              </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-500">Preguntas:</span>
                 <span className="font-medium text-gray-700">{evaluacion.preguntas?.length || 0}</span>
@@ -331,13 +318,13 @@ const Evaluaciones = ({ companies = initialCompanies, employees = initialEmploye
 
       {evaluacionesFiltradas.length === 0 && (
         <div className="bg-white rounded-lg shadow-md p-12 text-center">
-          <p className="text-gray-500 text-lg">No se encontraron evaluaciones</p>
+          <p className="text-gray-500 text-lg">No se encontraron evaluaciones para esta empresa</p>
         </div>
       )}
-
     </div>
   );
 };
 
-export default Evaluaciones;
+export default EmpresaEvaluaciones;
+
 

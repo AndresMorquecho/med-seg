@@ -52,3 +52,53 @@ export const rechazarEvidencia = (evidenciaId, rechazadoPor, observaciones) => {
   }
 };
 
+// Función para obtener evidencias de empresa (generales) por ítem
+export const getEvidenciasEmpresaByItem = (itemId, anexo1Id) => {
+  return evidencias.filter(e => 
+    e.itemId === itemId && 
+    e.anexo1Id === anexo1Id && 
+    e.tipoEvidencia === 'general'
+  );
+};
+
+// Función para obtener evidencias de trabajadores por ítem
+export const getEvidenciasTrabajadoresByItem = (itemId, anexo1Id) => {
+  return evidencias.filter(e => 
+    e.itemId === itemId && 
+    e.anexo1Id === anexo1Id && 
+    e.tipoEvidencia === 'trabajador'
+  );
+};
+
+// Función para agregar evidencia
+export const addEvidencia = (evidencia) => {
+  const nuevaEvidencia = {
+    id: evidencias.length > 0 ? Math.max(...evidencias.map(e => e.id)) + 1 : 1,
+    ...evidencia,
+    fechaSubida: evidencia.fechaSubida || new Date().toISOString().split('T')[0],
+    estado: evidencia.estado || 'Borrador', // Por defecto Borrador
+    disponibleParaUsuario: evidencia.disponibleParaUsuario || false, // Disponibilidad para usuarios
+  };
+  evidencias.push(nuevaEvidencia);
+  return nuevaEvidencia;
+};
+
+// Función para publicar evidencia (cambiar estado a Publicado)
+export const publicarEvidencia = (evidenciaId) => {
+  const evidencia = evidencias.find(e => e.id === evidenciaId);
+  if (evidencia) {
+    evidencia.estado = 'Publicado';
+    evidencia.disponibleParaUsuario = true;
+  }
+};
+
+// Función para eliminar evidencia
+export const eliminarEvidencia = (evidenciaId) => {
+  const index = evidencias.findIndex(e => e.id === evidenciaId);
+  if (index !== -1) {
+    evidencias.splice(index, 1);
+    return true;
+  }
+  return false;
+};
+

@@ -44,27 +44,15 @@ const EmpresaView = ({ companies = initialCompanies, employees = initialEmployee
   const tabs = [
     { id: 'informacion', label: 'Información General', icon: BuildingIcon },
     { id: 'trabajadores', label: `Trabajadores (${trabajadoresEmpresa.length})`, icon: null },
-    { id: 'anexo1', label: 'Gestión del Anexo 1', icon: null },
-    { id: 'formularios', label: 'Formularios y Registros Dinámicos', icon: null },
-    { id: 'establecimientos', label: 'Establecimientos de Salud', icon: null },
-    { id: 'profesionales', label: 'Profesionales', icon: null },
-    { id: 'repositorio', label: 'Repositorio', icon: null }
+    { id: 'documentos', label: 'Documentos', icon: null }
   ];
 
   const handleTabChange = (tabId) => {
     setActiveTab(tabId);
-    if (tabId === 'anexo1') {
-      navigate(`/empresas/${empresaId}/anexo1/estado`);
-    } else if (tabId === 'trabajadores') {
+    if (tabId === 'trabajadores') {
       navigate(`/empresas/${empresaId}/trabajadores`);
-    } else if (tabId === 'formularios') {
-      navigate(`/empresas/${empresaId}/formularios`);
-    } else if (tabId === 'establecimientos') {
-      navigate(`/empresas/${empresaId}/establecimientos`);
-    } else if (tabId === 'profesionales') {
-      navigate(`/empresas/${empresaId}/profesionales`);
-    } else if (tabId === 'repositorio') {
-      navigate(`/empresas/${empresaId}/repositorio`);
+    } else if (tabId === 'documentos') {
+      navigate(`/empresas/${empresaId}/documentos`);
     } else {
       navigate(`/empresas/${empresaId}`);
     }
@@ -73,18 +61,10 @@ const EmpresaView = ({ companies = initialCompanies, employees = initialEmployee
   // Detectar tab activo desde la URL
   useEffect(() => {
     const path = window.location.pathname;
-    if (path.includes('/anexo1')) {
-      setActiveTab('anexo1');
-    } else if (path.includes('/trabajadores')) {
+    if (path.includes('/trabajadores')) {
       setActiveTab('trabajadores');
-    } else if (path.includes('/formularios')) {
-      setActiveTab('formularios');
-    } else if (path.includes('/establecimientos')) {
-      setActiveTab('establecimientos');
-    } else if (path.includes('/profesionales')) {
-      setActiveTab('profesionales');
-    } else if (path.includes('/repositorio')) {
-      setActiveTab('repositorio');
+    } else if (path.includes('/documentos')) {
+      setActiveTab('documentos');
     } else {
       setActiveTab('informacion');
     }

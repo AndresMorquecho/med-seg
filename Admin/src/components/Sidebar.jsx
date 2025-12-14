@@ -71,6 +71,10 @@ const Sidebar = () => {
   const menuItems = [
     { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { path: '/companies', icon: Building2, label: 'Empresas' },
+    { path: '/anexo1', icon: ClipboardCheck, label: 'Gestión del Anexo 1 – SST' },
+    { path: '/establecimientos-salud', icon: Hospital, label: 'Establecimientos de Salud' },
+    { path: '/profesionales', icon: UserCircle, label: 'Profesionales' },
+    { path: '/repositorio', icon: FolderOpen, label: 'Repositorio General' },
     { path: '/settings', icon: Settings, label: 'Configuración' }
   ];
 

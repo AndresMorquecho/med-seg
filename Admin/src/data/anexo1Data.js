@@ -48,6 +48,11 @@ export const getDocumentosByAnexo = (anexo1Id) => {
   return documentosInSitu.filter(doc => doc.anexo1Id === anexo1Id);
 };
 
+// Función helper para obtener documentos in situ por empresa
+export const getDocumentsInSituByEmpresa = (empresaId) => {
+  return documentosInSitu.filter(doc => doc.empresaId === empresaId);
+};
+
 // Función helper para calcular porcentaje de cumplimiento
 export const calcularPorcentajeCumplimiento = (respuestas) => {
   if (!respuestas || Object.keys(respuestas).length === 0) return 0;
@@ -99,6 +104,38 @@ export const updateRespuestaItem = (anexoId, itemId, respuesta) => {
     return anexo;
   }
   return null;
+};
+
+// Función para agregar documento in situ
+export const addDocumentoInSitu = (documento) => {
+  const nuevoDocumento = {
+    id: documentosInSitu.length > 0 ? Math.max(...documentosInSitu.map(d => d.id)) + 1 : 1,
+    ...documento,
+    estado: documento.estado || 'Borrador',
+    disponibleParaUsuario: documento.disponibleParaUsuario || false,
+    fechaSubida: documento.fechaSubida || new Date().toISOString().split('T')[0],
+  };
+  documentosInSitu.push(nuevoDocumento);
+  return nuevoDocumento;
+};
+
+// Función para publicar documento in situ
+export const publicarDocumentoInSitu = (documentoId) => {
+  const documento = documentosInSitu.find(doc => doc.id === documentoId);
+  if (documento) {
+    documento.estado = 'Publicado';
+    documento.disponibleParaUsuario = true;
+  }
+};
+
+// Función para eliminar documento in situ
+export const eliminarDocumentoInSitu = (documentoId) => {
+  const index = documentosInSitu.findIndex(doc => doc.id === documentoId);
+  if (index !== -1) {
+    documentosInSitu.splice(index, 1);
+    return true;
+  }
+  return false;
 };
 
 

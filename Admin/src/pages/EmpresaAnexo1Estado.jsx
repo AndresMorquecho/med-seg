@@ -1,26 +1,42 @@
 import { useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { initialCompanies } from '../data/companiesData';
-import { anexos1, getAnexosByEmpresa, calcularPorcentajeCumplimiento, calcularCumplimientoPorCategoria } from '../data/anexo1Data';
-import { getTareasByEmpresa } from '../data/tareasData';
+import { initialEmployees } from '../data/employeesData';
+import { getDocumentosByEmpresa } from '../data/documentosDinamicosData';
 import { getEvidenciasByEmpresa } from '../data/evidenciasData';
+import { getDocumentsInSituByEmpresa } from '../data/anexo1Data';
+import { capacitaciones } from '../data/capacitacionesData';
+import { evaluaciones, respuestasEvaluaciones } from '../data/evaluacionesData';
+import { filtrarSeccionesPorEmpresa, obtenerConfiguracionEmpresa } from '../utils/anexo1Filtros';
 import { SECCIONES_SST } from '../components/documentos/anexo1/anexo1';
 
-const ChartIcon = ({ className }) => (
+const BuildingIcon = ({ className }) => (
   <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
   </svg>
 );
 
-const TaskIcon = ({ className }) => (
+const UsersIcon = ({ className }) => (
   <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
   </svg>
 );
 
-const FileIcon = ({ className }) => (
+const DocumentIcon = ({ className }) => (
   <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+  </svg>
+);
+
+const BookOpenIcon = ({ className }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+  </svg>
+);
+
+const ClipboardCheckIcon = ({ className }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
   </svg>
 );
 
@@ -28,60 +44,112 @@ const EmpresaAnexo1Estado = ({ companies = initialCompanies }) => {
   const { empresaId } = useParams();
   const navigate = useNavigate();
 
-  const empresa = companies.find(c => c.id === parseInt(empresaId));
-  const anexosEmpresa = getAnexosByEmpresa(parseInt(empresaId));
-  const anexoActual = anexosEmpresa.find(a => a.estado === 'Borrador' || a.estado === 'Publicado') || anexosEmpresa[0];
-  const tareasEmpresa = getTareasByEmpresa(parseInt(empresaId));
-
-  const porcentajeCumplimiento = useMemo(() => {
-    if (!anexoActual || !anexoActual.respuestas) return 0;
-    const respuestas = anexoActual.respuestas;
-    const items = Object.values(respuestas);
-    // Fórmula: CUMPLE / (CUMPLE + NO_CUMPLE), excluyendo NA
-    const cumplidos = items.filter(r => r.estado === 'CUMPLE').length;
-    const noCumplidos = items.filter(r => r.estado === 'NO_CUMPLE').length;
-    const total = cumplidos + noCumplidos;
-    return total > 0 ? Math.round((cumplidos / total) * 100) : 0;
-  }, [anexoActual]);
-
-  const cumplimientoPorCategoria = useMemo(() => {
-    if (!anexoActual) return {};
-    const categorias = {};
-    SECCIONES_SST.filter(s => s.tipo === 'checklist').forEach(seccion => {
-      if (seccion.items) {
-        const porcentaje = calcularCumplimientoPorCategoria(
-          anexoActual.respuestas || {},
-          seccion.items
-        );
-        categorias[seccion.titulo] = porcentaje;
-      }
+  const empresaIdNum = parseInt(empresaId);
+  const empresa = companies.find(c => c.id === empresaIdNum);
+  
+  // Configuración de empresa para filtrado dinámico
+  const configEmpresa = useMemo(() => {
+    if (!empresa) return null;
+    return obtenerConfiguracionEmpresa({
+      ...empresa,
+      employees: initialEmployees.filter(e => e.companyId === empresaIdNum)
     });
-    return categorias;
-  }, [anexoActual]);
+  }, [empresa, empresaIdNum]);
+  
+  // Secciones filtradas según la empresa
+  const seccionesFiltradas = useMemo(() => {
+    if (!configEmpresa) return [];
+    return filtrarSeccionesPorEmpresa(SECCIONES_SST, configEmpresa);
+  }, [configEmpresa]);
+  
+  // Calcular total de ítems aplicables
+  const totalItemsAplicables = useMemo(() => {
+    return seccionesFiltradas
+      .filter(s => s.tipo === 'checklist')
+      .reduce((total, seccion) => total + (seccion.items?.length || 0), 0);
+  }, [seccionesFiltradas]);
+  
+  // Datos quemados para la barra de progreso
+  const datosProgreso = useMemo(() => {
+    // Datos quemados realistas
+    return {
+      totalItemsAplicables: 52,
+      itemsCumple: 31,
+      itemsNoCumple: 12,
+      itemsConObservaciones: 9,
+      itemsNoAplica: 0, // No se cuentan en el total
+      porcentajeCumplimiento: 59 // Calculado: (31 / (31 + 12)) * 100 = 72%, pero usamos 59% como dato quemado
+    };
+  }, []);
+  
+  // Ítems faltantes (datos quemados)
+  const itemsFaltantes = useMemo(() => {
+    return [
+      { codigo: '1.3', texto: 'Falta socialización de la política de SST' },
+      { codigo: '3.2', texto: 'No se encontró el mapa de riesgos actualizado' },
+      { codigo: '5.4', texto: 'Sin evidencia de medición de agentes físicos' },
+      { codigo: '7.1', texto: 'No hay informe de medidas de prevención implementadas' }
+    ];
+  }, []);
+  
+  // Calcular ítems ocultos
+  const itemsOcultos = useMemo(() => {
+    const totalItemsOriginales = SECCIONES_SST
+      .filter(s => s.tipo === 'checklist')
+      .reduce((total, seccion) => total + (seccion.items?.length || 0), 0);
+    return totalItemsOriginales - totalItemsAplicables;
+  }, [totalItemsAplicables]);
+  
+  // Datos de empleados
+  const empleados = useMemo(() => {
+    return initialEmployees.filter(e => e.companyId === empresaIdNum);
+  }, [empresaIdNum]);
 
-  const itemsNoCumplen = useMemo(() => {
-    if (!anexoActual || !anexoActual.respuestas) return 0;
-    return Object.values(anexoActual.respuestas).filter(r => r.estado === 'NO_CUMPLE').length;
-  }, [anexoActual]);
+  // Documentos realizados
+  const documentosRealizados = useMemo(() => {
+    const documentosDinamicos = getDocumentosByEmpresa(empresaIdNum);
+    const evidencias = getEvidenciasByEmpresa(empresaIdNum);
+    const documentosInSitu = getDocumentsInSituByEmpresa(empresaIdNum);
+    return documentosDinamicos.length + evidencias.length + documentosInSitu.length;
+  }, [empresaIdNum]);
 
-  const tareasPendientes = useMemo(() => {
-    return tareasEmpresa.filter(t => t.estado === 'Pendiente' || t.estado === 'En revisión').length;
-  }, [tareasEmpresa]);
+  // Capacitaciones programadas o en curso
+  const capacitacionesEmpresa = useMemo(() => {
+    return capacitaciones.filter(cap => {
+      // Filtrar por empresa asignada o por empresaId
+      const tieneEmpresa = cap.empresasAsignadas?.includes(empresaIdNum) || cap.empresaId === empresaIdNum;
+      const estaProgramadaOEnCurso = cap.estado === 'Programada' || cap.estado === 'En curso';
+      return tieneEmpresa && estaProgramadaOEnCurso;
+    });
+  }, [empresaIdNum]);
 
-  const documentosFaltantes = useMemo(() => {
-    if (!anexoActual || !anexoActual.respuestas) return 0;
-    // Contar ítems NO CUMPLE que no tienen evidencias subidas
-    const evidenciasEmpresa = getEvidenciasByEmpresa(parseInt(empresaId));
-    const itemsNoCumplen = Object.entries(anexoActual.respuestas)
-      .filter(([_, respuesta]) => respuesta.estado === 'NO_CUMPLE');
-    
-    return itemsNoCumplen.filter(([itemId, _]) => {
-      const evidenciasItem = evidenciasEmpresa.filter(e => 
-        e.itemId === itemId && e.anexo1Id === anexoActual.id
-      );
-      return evidenciasItem.length === 0;
-    }).length;
-  }, [anexoActual, empresaId]);
+  // Evaluaciones disponibles y completadas
+  const evaluacionesEmpresa = useMemo(() => {
+    const evaluacionesDisponibles = evaluaciones.filter(evaluacion => {
+      const tieneEmpresa = evaluacion.empresasAsignadas?.includes(empresaIdNum) || evaluacion.empresaId === empresaIdNum;
+      return tieneEmpresa && evaluacion.estado === 'Activa';
+    });
+
+    // Obtener respuestas de evaluaciones para esta empresa
+    const respuestas = respuestasEvaluaciones.filter(resp => {
+      const evaluacion = evaluaciones.find(e => e.id === resp.evaluacionId);
+      if (!evaluacion) return false;
+      const tieneEmpresa = evaluacion.empresasAsignadas?.includes(empresaIdNum) || evaluacion.empresaId === empresaIdNum;
+      return tieneEmpresa && resp.completada;
+    });
+
+    // Calcular promedio de puntajes
+    const puntajes = respuestas.map(r => r.puntaje || 0).filter(p => p > 0);
+    const promedioPuntaje = puntajes.length > 0 
+      ? Math.round(puntajes.reduce((sum, p) => sum + p, 0) / puntajes.length)
+      : 0;
+
+    return {
+      disponibles: evaluacionesDisponibles.length,
+      completadas: respuestas.length,
+      promedioPuntaje
+    };
+  }, [empresaIdNum]);
 
   if (!empresa) {
     return (
@@ -95,189 +163,299 @@ const EmpresaAnexo1Estado = ({ companies = initialCompanies }) => {
 
   return (
     <div className="space-y-6">
-      {/* Tarjetas de resumen */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {/* Cumplimiento Total */}
-        <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-primary">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Cumplimiento Total</p>
-              <p className="text-4xl font-bold text-primary">{porcentajeCumplimiento}%</p>
-            </div>
-            <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center">
-              <ChartIcon className="w-8 h-8 text-primary" />
-            </div>
-          </div>
-        </div>
-
-        {/* Ítems No Cumplen */}
-        <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-red-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Ítems No Cumplen</p>
-              <p className="text-4xl font-bold text-red-600">{itemsNoCumplen}</p>
-            </div>
-            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center">
-              <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </div>
-          </div>
-        </div>
-
-        {/* Tareas Pendientes */}
-        <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-orange-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Tareas Pendientes</p>
-              <p className="text-4xl font-bold text-orange-600">{tareasPendientes}</p>
-            </div>
-            <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center">
-              <TaskIcon className="w-8 h-8 text-orange-600" />
-            </div>
-          </div>
-        </div>
-
-        {/* Documentos Faltantes */}
-        <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-yellow-500">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 mb-1">Documentos Faltantes</p>
-              <p className="text-4xl font-bold text-yellow-600">{documentosFaltantes}</p>
-            </div>
-            <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center">
-              <FileIcon className="w-8 h-8 text-yellow-600" />
-            </div>
-          </div>
-        </div>
-
-        {/* Última Inspección */}
-        {anexoActual && (
-          <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-blue-500">
-            <div className="flex items-center justify-between">
+      {/* Card Principal: Datos de la Empresa */}
+      <div className="bg-gradient-to-r from-primary to-primary-dark rounded-xl shadow-lg p-8 text-white">
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <div className="flex items-center gap-4 mb-4">
+              {empresa.logo && (
+                <div className="flex-shrink-0">
+                  <img 
+                    src={empresa.logo} 
+                    alt="Logo" 
+                    className="w-20 h-20 object-contain bg-white rounded-lg p-2" 
+                  />
+                </div>
+              )}
               <div>
-                <p className="text-sm text-gray-600 mb-1">Última Inspección</p>
-                <p className="text-lg font-bold text-blue-600">
-                  {new Date(anexoActual.fechaInspeccion).toLocaleDateString('es-ES', {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric'
-                  })}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">{anexoActual.estado}</p>
-              </div>
-              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center">
-                <FileIcon className="w-8 h-8 text-blue-600" />
+                <h2 className="text-3xl font-bold mb-2">{empresa.name}</h2>
+                <div className="flex flex-wrap gap-4 text-white/90 text-sm">
+                  <div className="flex items-center gap-2">
+                    <BuildingIcon className="w-5 h-5" />
+                    <span>RUC: {empresa.ruc}</span>
+                  </div>
+                  {empresa.tipoActividad && (
+                    <div className="flex items-center gap-2">
+                      <span className="px-3 py-1 bg-white/20 rounded-full">
+                        {empresa.tipoActividad}
+                      </span>
+                    </div>
+                  )}
+                  {empresa.address && (
+                    <div className="flex items-center gap-2">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                      <span>{empresa.address}</span>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
-        )}
-
-        {/* Total Inspecciones */}
-        <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-purple-500">
-          <div className="flex items-center justify-between">
+        </div>
+        
+        {/* Barra de Progreso del Anexo 1 */}
+        <div className="mt-6 bg-white/10 rounded-lg p-6 backdrop-blur-sm">
+          <div className="flex items-center justify-between mb-4">
             <div>
-              <p className="text-sm text-gray-600 mb-1">Total Inspecciones</p>
-              <p className="text-4xl font-bold text-purple-600">{anexosEmpresa.length}</p>
+              <h3 className="text-xl font-bold mb-1">Cumplimiento del Anexo 1</h3>
+              <p className="text-white/80 text-sm">
+                {datosProgreso.itemsCumple} de {datosProgreso.totalItemsAplicables} ítems cumplidos
+              </p>
             </div>
-            <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center">
-              <FileIcon className="w-8 h-8 text-purple-600" />
+            <div className="text-right">
+              <p className="text-4xl font-bold">{datosProgreso.porcentajeCumplimiento}%</p>
+              <p className="text-white/80 text-xs">Cumplimiento total</p>
+            </div>
+          </div>
+          
+          {/* Barra de progreso visual */}
+          <div className="w-full h-8 bg-white/20 rounded-full overflow-hidden flex mb-4">
+            <div 
+              className="bg-green-500 h-full flex items-center justify-center text-white text-xs font-semibold"
+              style={{ width: `${(datosProgreso.itemsCumple / datosProgreso.totalItemsAplicables) * 100}%` }}
+            >
+              {datosProgreso.itemsCumple} Cumple
+            </div>
+            <div 
+              className="bg-yellow-500 h-full flex items-center justify-center text-white text-xs font-semibold"
+              style={{ width: `${(datosProgreso.itemsConObservaciones / datosProgreso.totalItemsAplicables) * 100}%` }}
+            >
+              {datosProgreso.itemsConObservaciones} Observado
+            </div>
+            <div 
+              className="bg-red-500 h-full flex items-center justify-center text-white text-xs font-semibold"
+              style={{ width: `${(datosProgreso.itemsNoCumple / datosProgreso.totalItemsAplicables) * 100}%` }}
+            >
+              {datosProgreso.itemsNoCumple} No Cumple
+            </div>
+          </div>
+          
+          {/* Resumen de ítems */}
+          <div className="grid grid-cols-4 gap-4 text-center">
+            <div className="bg-white/10 rounded-lg p-3">
+              <p className="text-2xl font-bold">{datosProgreso.totalItemsAplicables}</p>
+              <p className="text-xs text-white/80">Ítems Aplicables</p>
+            </div>
+            <div className="bg-green-500/30 rounded-lg p-3">
+              <p className="text-2xl font-bold text-green-200">{datosProgreso.itemsCumple}</p>
+              <p className="text-xs text-white/80">Cumple</p>
+            </div>
+            <div className="bg-yellow-500/30 rounded-lg p-3">
+              <p className="text-2xl font-bold text-yellow-200">{datosProgreso.itemsConObservaciones}</p>
+              <p className="text-xs text-white/80">Observado</p>
+            </div>
+            <div className="bg-red-500/30 rounded-lg p-3">
+              <p className="text-2xl font-bold text-red-200">{datosProgreso.itemsNoCumple}</p>
+              <p className="text-xs text-white/80">No Cumple</p>
             </div>
           </div>
         </div>
       </div>
+      
+      {/* Bloque: ¿Qué falta por cumplir? */}
+      <div className="bg-white rounded-xl shadow-lg p-6 border-2 border-red-100">
+        <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+          <svg className="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          ¿Qué falta por cumplir?
+        </h3>
+        <div className="space-y-2">
+          {itemsFaltantes.map((item, idx) => (
+            <div key={idx} className="flex items-start gap-3 p-3 bg-red-50 rounded-lg border-l-4 border-red-500">
+              <span className="px-2 py-1 bg-red-600 text-white text-xs font-bold rounded flex-shrink-0">
+                {item.codigo}
+              </span>
+              <p className="text-sm text-gray-800 flex-1">{item.texto}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+      
+      {/* Información de ítems dinámicos */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-white rounded-xl shadow-lg p-6 border-2 border-blue-100">
+          <h3 className="text-lg font-bold text-gray-800 mb-2">Ítems Aplicables (Dinámicos)</h3>
+          <p className="text-4xl font-bold text-blue-600 mb-2">{totalItemsAplicables}</p>
+          <p className="text-sm text-gray-600">
+            Total de ítems que aplican para esta empresa según su configuración
+          </p>
+        </div>
+        
+        <div className="bg-white rounded-xl shadow-lg p-6 border-2 border-gray-200">
+          <h3 className="text-lg font-bold text-gray-800 mb-2">Ítems Ocultos por No Aplicar</h3>
+          <p className="text-4xl font-bold text-gray-500 mb-2">{itemsOcultos}</p>
+          <p className="text-sm text-gray-600">
+            Ítems que no aplican para esta empresa y no se muestran en el checklist
+          </p>
+        </div>
+      </div>
 
-      {/* Cumplimiento por Categoría */}
-      {Object.keys(cumplimientoPorCategoria).length > 0 && (
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h2 className="text-xl font-bold text-gray-800 mb-4">Cumplimiento por Categoría</h2>
-          <div className="space-y-4">
-            {Object.entries(cumplimientoPorCategoria).map(([categoria, porcentaje]) => (
-              <div key={categoria}>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-gray-700">{categoria}</span>
-                  <span className={`text-sm font-bold ${
-                    porcentaje >= 80 ? 'text-green-600' :
-                    porcentaje >= 50 ? 'text-yellow-600' :
-                    'text-red-600'
-                  }`}>
-                    {porcentaje}%
-                  </span>
+      {/* Grid de Cards Informativos */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {/* Número de Empleados */}
+        <div className="bg-white rounded-xl shadow-lg p-6 border-2 border-blue-100 hover:shadow-xl transition-all">
+          <div className="flex items-center justify-between mb-4">
+            <div className="w-14 h-14 bg-blue-100 rounded-xl flex items-center justify-center">
+              <UsersIcon className="w-7 h-7 text-blue-600" />
+            </div>
+          </div>
+          <p className="text-sm text-gray-600 mb-2">Número de Empleados</p>
+          <p className="text-5xl font-bold text-blue-600 mb-2">{empleados.length}</p>
+          <p className="text-xs text-gray-500">Trabajadores activos</p>
+        </div>
+
+        {/* Documentos Realizados */}
+        <div className="bg-white rounded-xl shadow-lg p-6 border-2 border-green-100 hover:shadow-xl transition-all">
+          <div className="flex items-center justify-between mb-4">
+            <div className="w-14 h-14 bg-green-100 rounded-xl flex items-center justify-center">
+              <DocumentIcon className="w-7 h-7 text-green-600" />
+            </div>
+          </div>
+          <p className="text-sm text-gray-600 mb-2">Documentos Realizados</p>
+          <p className="text-5xl font-bold text-green-600 mb-2">{documentosRealizados}</p>
+          <p className="text-xs text-gray-500">Total de documentos</p>
+        </div>
+
+        {/* Capacitaciones */}
+        <div className="bg-white rounded-xl shadow-lg p-6 border-2 border-purple-100 hover:shadow-xl transition-all">
+          <div className="flex items-center justify-between mb-4">
+            <div className="w-14 h-14 bg-purple-100 rounded-xl flex items-center justify-center">
+              <BookOpenIcon className="w-7 h-7 text-purple-600" />
+            </div>
+            {capacitacionesEmpresa.length > 0 && (
+              <span className="px-3 py-1 bg-purple-500 text-white rounded-full text-xs font-bold">
+                {capacitacionesEmpresa.filter(c => c.estado === 'En curso').length > 0 ? 'En Curso' : 'Programadas'}
+              </span>
+            )}
+          </div>
+          <p className="text-sm text-gray-600 mb-2">Capacitaciones</p>
+          <p className="text-5xl font-bold text-purple-600 mb-2">{capacitacionesEmpresa.length}</p>
+          <p className="text-xs text-gray-500">
+            {capacitacionesEmpresa.length === 0 
+              ? 'Sin capacitaciones activas'
+              : capacitacionesEmpresa.filter(c => c.estado === 'En curso').length > 0
+                ? `${capacitacionesEmpresa.filter(c => c.estado === 'En curso').length} en curso`
+                : `${capacitacionesEmpresa.length} programadas`
+            }
+          </p>
+        </div>
+
+        {/* Evaluaciones */}
+        <div className="bg-white rounded-xl shadow-lg p-6 border-2 border-orange-100 hover:shadow-xl transition-all">
+          <div className="flex items-center justify-between mb-4">
+            <div className="w-14 h-14 bg-orange-100 rounded-xl flex items-center justify-center">
+              <ClipboardCheckIcon className="w-7 h-7 text-orange-600" />
+            </div>
+            {evaluacionesEmpresa.disponibles > 0 && (
+              <span className="px-3 py-1 bg-orange-500 text-white rounded-full text-xs font-bold">
+                Disponibles
+              </span>
+            )}
+          </div>
+          <p className="text-sm text-gray-600 mb-2">Evaluaciones</p>
+          <div className="space-y-1">
+            <p className="text-3xl font-bold text-orange-600">
+              {evaluacionesEmpresa.disponibles}
+            </p>
+            {evaluacionesEmpresa.completadas > 0 && (
+              <div className="pt-2 border-t border-gray-200">
+                <p className="text-xs text-gray-600 mb-1">
+                  Completadas: <span className="font-semibold text-gray-800">{evaluacionesEmpresa.completadas}</span>
+                </p>
+                {evaluacionesEmpresa.promedioPuntaje > 0 && (
+                  <p className="text-xs text-gray-600">
+                    Promedio: <span className="font-semibold text-gray-800">{evaluacionesEmpresa.promedioPuntaje}%</span>
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+          <p className="text-xs text-gray-500 mt-2">
+            {evaluacionesEmpresa.disponibles === 0 
+              ? 'Sin evaluaciones disponibles'
+              : evaluacionesEmpresa.completadas > 0
+                ? `${evaluacionesEmpresa.completadas} de ${evaluacionesEmpresa.disponibles} completadas`
+                : 'Ninguna completada aún'
+            }
+          </p>
+        </div>
+      </div>
+
+      {/* Detalle de Capacitaciones */}
+      {capacitacionesEmpresa.length > 0 && (
+        <div className="bg-white rounded-xl shadow-lg p-6 border-2 border-gray-100">
+          <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+            <BookOpenIcon className="w-6 h-6 text-purple-600" />
+            Capacitaciones Activas
+          </h3>
+          <div className="space-y-3">
+            {capacitacionesEmpresa.map(cap => (
+              <div 
+                key={cap.id} 
+                className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <div className="flex-1">
+                  <p className="font-semibold text-gray-800">{cap.nombre}</p>
+                  <p className="text-sm text-gray-600 mt-1">{cap.descripcion}</p>
+                  <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
+                    <span>Fecha: {new Date(cap.fechaProgramada).toLocaleDateString('es-ES')}</span>
+                    {cap.modalidad && <span>Modalidad: {cap.modalidad}</span>}
+                  </div>
                 </div>
-                <div className="w-full bg-gray-200 rounded-full h-3">
-                  <div
-                    className={`h-3 rounded-full transition-all ${
-                      porcentaje >= 80 ? 'bg-green-500' :
-                      porcentaje >= 50 ? 'bg-yellow-500' :
-                      'bg-red-500'
-                    }`}
-                    style={{ width: `${porcentaje}%` }}
-                  />
-                </div>
+                <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                  cap.estado === 'En curso' 
+                    ? 'bg-green-100 text-green-800' 
+                    : 'bg-blue-100 text-blue-800'
+                }`}>
+                  {cap.estado}
+                </span>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* Botones de acción */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <button
-          onClick={() => {
-            if (anexoActual) {
-              navigate(`/anexo1/editor/${empresaId}/${anexoActual.id}`);
-            } else {
-              navigate(`/anexo1/editor/${empresaId}`);
-            }
-          }}
-          className="flex items-center justify-center gap-3 bg-primary text-white px-6 py-4 rounded-lg hover:bg-primary-dark transition-colors shadow-md"
-        >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          <span className="font-semibold">
-            {anexoActual ? 'Continuar Inspección' : 'Nueva Inspección'}
-          </span>
-        </button>
-        <button
-          onClick={() => navigate(`/empresas/${empresaId}/anexo1/historial`)}
-          className="flex items-center justify-center gap-3 bg-blue-600 text-white px-6 py-4 rounded-lg hover:bg-blue-700 transition-colors shadow-md"
-        >
-          <FileIcon className="w-6 h-6" />
-          <span className="font-semibold">Ver Inspecciones Anteriores</span>
-        </button>
-        <button
-          onClick={() => navigate(`/empresas/${empresaId}/anexo1/tareas`)}
-          className="flex items-center justify-center gap-3 bg-orange-600 text-white px-6 py-4 rounded-lg hover:bg-orange-700 transition-colors shadow-md"
-        >
-          <TaskIcon className="w-6 h-6" />
-          <span className="font-semibold">Ver Tareas ({tareasPendientes})</span>
-        </button>
-        <button
-          onClick={() => navigate(`/empresas/${empresaId}/anexo1/documentos-requeridos`)}
-          className="flex items-center justify-center gap-3 bg-yellow-600 text-white px-6 py-4 rounded-lg hover:bg-yellow-700 transition-colors shadow-md"
-        >
-          <FileIcon className="w-6 h-6" />
-          <span className="font-semibold">Ver Documentos ({documentosFaltantes})</span>
-        </button>
-        <button
-          onClick={() => navigate(`/empresas/${empresaId}/repositorio`)}
-          className="flex items-center justify-center gap-3 bg-purple-600 text-white px-6 py-4 rounded-lg hover:bg-purple-700 transition-colors shadow-md"
-        >
-          <FileIcon className="w-6 h-6" />
-          <span className="font-semibold">Ir al Repositorio</span>
-        </button>
-        <button
-          onClick={() => navigate(`/empresas/${empresaId}/anexo1/analitica`)}
-          className="flex items-center justify-center gap-3 bg-green-600 text-white px-6 py-4 rounded-lg hover:bg-green-700 transition-colors shadow-md"
-        >
-          <ChartIcon className="w-6 h-6" />
-          <span className="font-semibold">Ver Analítica</span>
-        </button>
-      </div>
+      {/* Detalle de Evaluaciones */}
+      {evaluacionesEmpresa.disponibles > 0 && (
+        <div className="bg-white rounded-xl shadow-lg p-6 border-2 border-gray-100">
+          <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+            <ClipboardCheckIcon className="w-6 h-6 text-orange-600" />
+            Evaluaciones Disponibles
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-gradient-to-br from-orange-50 to-white rounded-lg p-4 border border-orange-200">
+              <p className="text-sm text-gray-600 mb-1">Total Disponibles</p>
+              <p className="text-3xl font-bold text-orange-600">{evaluacionesEmpresa.disponibles}</p>
+            </div>
+            <div className="bg-gradient-to-br from-green-50 to-white rounded-lg p-4 border border-green-200">
+              <p className="text-sm text-gray-600 mb-1">Completadas</p>
+              <p className="text-3xl font-bold text-green-600">{evaluacionesEmpresa.completadas}</p>
+            </div>
+            {evaluacionesEmpresa.promedioPuntaje > 0 && (
+              <div className="bg-gradient-to-br from-blue-50 to-white rounded-lg p-4 border border-blue-200">
+                <p className="text-sm text-gray-600 mb-1">Promedio de Puntaje</p>
+                <p className="text-3xl font-bold text-blue-600">{evaluacionesEmpresa.promedioPuntaje}%</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
 export default EmpresaAnexo1Estado;
-

@@ -20,13 +20,14 @@ const BuildingIcon = ({ className }) => (
   </svg>
 );
 
-const Login = ({ employees, onLogin }) => {
+const Login = ({ employees, companies, onLogin }) => {
   const navigate = useNavigate();
   const [cedula, setCedula] = useState('');
+  const [ruc, setRuc] = useState('');
   const [usuario, setUsuario] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [tipoUsuario, setTipoUsuario] = useState('admin'); // 'admin' o 'user'
+  const [tipoUsuario, setTipoUsuario] = useState('admin'); // 'admin', 'user', 'empresa'
   const [showEmployeeList, setShowEmployeeList] = useState(false);
   const [employeeSearch, setEmployeeSearch] = useState('');
 
@@ -87,7 +88,7 @@ const Login = ({ employees, onLogin }) => {
         onLogin({ tipo: 'admin', nombre: 'Administrador' });
       }
       navigate('/dashboard');
-    } else {
+    } else if (tipoUsuario === 'user') {
       // Login como usuario (empleado)
       if (!cedula || !password) {
         setError('Por favor ingrese su cédula y contraseña');
@@ -118,6 +119,36 @@ const Login = ({ employees, onLogin }) => {
         });
       }
       navigate('/usuario/documentos');
+    } else if (tipoUsuario === 'empresa') {
+      // Login como empresa
+      if (!ruc || !password) {
+        setError('Por favor ingrese RUC y contraseña');
+        return;
+      }
+
+      if (password !== '123') {
+        setError('Contraseña incorrecta. La contraseña es: 123');
+        return;
+      }
+
+      // Buscar empresa por RUC
+      const empresa = companies?.find(emp => emp.ruc === ruc);
+
+      if (!empresa) {
+        setError('No se encontró una empresa con ese RUC');
+        return;
+      }
+
+      if (onLogin) {
+        onLogin({
+          tipo: 'empresa',
+          empresa: empresa,
+          nombre: empresa.name,
+          ruc: empresa.ruc,
+          empresaId: empresa.id
+        });
+      }
+      navigate('/portal-empresa');
     }
   };
 
@@ -147,9 +178,10 @@ const Login = ({ employees, onLogin }) => {
                 setUsuario('');
                 setPassword('');
                 setCedula('');
+                setRuc('');
                 setError('');
               }}
-              className={`flex-1 py-2 px-4 rounded-md font-medium transition-colors ${
+              className={`flex-1 py-2 px-4 rounded-md font-medium transition-colors text-xs ${
                 tipoUsuario === 'admin'
                   ? 'bg-primary text-white shadow-md'
                   : 'text-gray-700 hover:bg-gray-200'
@@ -160,19 +192,38 @@ const Login = ({ employees, onLogin }) => {
             <button
               type="button"
               onClick={() => {
+                setTipoUsuario('empresa');
+                setUsuario('');
+                setPassword('');
+                setCedula('');
+                setRuc('');
+                setError('');
+              }}
+              className={`flex-1 py-2 px-4 rounded-md font-medium transition-colors text-xs ${
+                tipoUsuario === 'empresa'
+                  ? 'bg-primary text-white shadow-md'
+                  : 'text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              Empresa
+            </button>
+            <button
+              type="button"
+              onClick={() => {
                 setTipoUsuario('user');
                 setUsuario('');
                 setPassword('');
                 setCedula('');
+                setRuc('');
                 setError('');
               }}
-              className={`flex-1 py-2 px-4 rounded-md font-medium transition-colors ${
+              className={`flex-1 py-2 px-4 rounded-md font-medium transition-colors text-xs ${
                 tipoUsuario === 'user'
                   ? 'bg-primary text-white shadow-md'
                   : 'text-gray-700 hover:bg-gray-200'
               }`}
             >
-              Usuario
+              Trabajador
             </button>
           </div>
         </div>
@@ -213,6 +264,49 @@ const Login = ({ employees, onLogin }) => {
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
                   Usuario: admin, Contraseña: 123
+                </p>
+              </div>
+            </>
+          )}
+
+          {tipoUsuario === 'empresa' && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  RUC de la Empresa
+                </label>
+                <div className="relative">
+                  <BuildingIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <input
+                    type="text"
+                    value={ruc}
+                    onChange={(e) => setRuc(e.target.value)}
+                    placeholder="Ingrese el RUC de la empresa"
+                    required
+                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                  />
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Ejemplo: 20123456789
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Contraseña
+                </label>
+                <div className="relative">
+                  <LockIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Ingrese su contraseña"
+                    required
+                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                  />
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Contraseña por defecto: 123
                 </p>
               </div>
             </>
